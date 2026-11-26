@@ -67,7 +67,7 @@ function buildPayload(msg, { store, settings, now = Date.now() }) {
       const cycle = a.resolveRange('cycle', { now, quota });
       const rows = loadRows(store, settings, cycle);
       const local = rows.reduce((s, r) => s + r.credits, 0);
-      return { range: cycle, meta, quota, cycle: { ...cycle, localCredits: local, daily: a.buildDaily(rows, cycle) } };
+      return { range: cycle, meta, quota, cycle: { ...cycle, localCredits: local, daily: a.buildDaily(rows, cycle, { utc: !!cycle.utc }) } };
     }
     case 'overview':
     default:

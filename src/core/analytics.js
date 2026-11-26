@@ -48,7 +48,7 @@ function startOfWeek(t) {
 }
 
 /**
- * @typedef {{ key: string, label: string, from: number, to: number, resetAt?: string | null }} Range
+ * @typedef {{ key: string, label: string, from: number, to: number, resetAt?: string | null, utc?: boolean }} Range
  */
 
 /**
@@ -74,7 +74,8 @@ function resolveRange(key, { now, quota, earliest }) {
       if (Number.isFinite(reset)) {
         const r = new Date(reset);
         const from = Date.UTC(r.getUTCFullYear(), r.getUTCMonth() - 1, r.getUTCDate(), r.getUTCHours(), r.getUTCMinutes());
-        if (from < now) return { key: 'cycle', label: RANGE_LABELS.cycle, from, to, resetAt: quota?.resetAt ?? null };
+        // Billing dates are shown as UTC calendar dates, like Kiro does.
+      if (from < now) return { key: 'cycle', label: RANGE_LABELS.cycle, from, to, resetAt: quota?.resetAt ?? null, utc: true };
       }
       return { key: 'cycle', label: '最近 30 天（未读到计费周期）', from: now - 30 * DAY, to, resetAt: null };
     }
@@ -541,15 +542,21 @@ function buildSessionList(sessions, rows, range) {
     }));
 }
 
-/** @param {any[]} rows @param {Range} range */
-function buildDaily(rows, range) {
+/**
+ * Credits per day. With `utc`, days are UTC calendar days, which is how Kiro
+ * bills (the cycle resets at 00:00 UTC on the 1st); `day` is then a UTC midnight.
+ * @param {any[]} rows @param {Range} range @param {{ utc?: boolean }} [opts]
+ */
+function buildDaily(rows, range, opts = {}) {
+  const dayOf = opts.utc ? (/** @type {number} */ t) => Math.floor(t / DAY) * DAY : startOfDay;
+  const next = opts.utc ? (/** @type {number} */ t) => t + DAY : (/** @type {number} */ t) => addDays(t, 1);
   /** @type {Array<{ day: number, credits: number, requests: number }>} */
   const days = [];
-  for (let d = startOfDay(range.from); d < range.to; d = addDays(d, 1)) days.push({ day: d, credits: 0, requests: 0 });
+  for (let d = dayOf(range.from); d < range.to; d = next(d)) days.push({ day: d, credits: 0, requests: 0 });
   const index = new Map(days.map((d, i) => [d.day, i]));
   for (const r of rows) {
     if (r.ts == null) continue;
-    const i = index.get(startOfDay(r.ts));
+    const i = index.get(dayOf(r.ts));
     if (i == null) continue;
     days[i].credits += r.credits;
     if (r.kind === 'main') days[i].requests++;

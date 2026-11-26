@@ -50,7 +50,7 @@ class SessionStatusBar {
     for (const [k, v] of rows) t.appendMarkdown(`| ${md(k)} | ${md(v)} |\n`);
     if (quota && quota.used != null) {
       t.appendMarkdown(
-        `\n---\n\n本计费周期：${md(f.credits(quota.used))} / ${md(f.credits(quota.limit))} credits（${md(f.pct(quota.percent))}）· ${md(f.monthDay(quota.resetAt))} 重置\n\n`,
+        `\n---\n\n本计费周期：${md(f.credits(quota.used))} / ${md(f.credits(quota.limit))} credits（${md(f.pct(quota.percent))}）· ${md(f.billingDay(quota.resetAt))} 重置\n\n`,
       );
     }
     const storage = data.storage === 'memory' ? '内存模式，不写入磁盘。' : '';

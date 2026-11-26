@@ -209,14 +209,31 @@
     return `<header class="top"><div class="brand">Toys for Kiro</div><nav class="tabs">${tabs}</nav><div class="grow"></div>${range}<button class="icon-btn" data-action="refresh" title="重新扫描本地数据">⟳</button></header>`;
   }
 
+  /** Billing dates are UTC calendar dates, as Kiro shows them. @param {number | string | null | undefined} t */
+  function utcMd(t) {
+    if (t == null) return '—';
+    const d = new Date(t);
+    return d.getUTCMonth() + 1 + '/' + d.getUTCDate();
+  }
+  const UTC_NOTE = 'Kiro 按 UTC 时间每月 1 号 0 点重置额度，周期日期按 UTC 显示。';
+
+  /** "11/25", or "2027/11/25" when not in the current year. @param {number | string} t @param {number} now */
+  function ymd(t, now) {
+    const d = new Date(t);
+    return d.getFullYear() === new Date(now).getFullYear() ? md(t) : `${d.getFullYear()}/${md(t)}`;
+  }
+
   /** @param {any} r */
   function caption(r) {
-    const reset = r.resetAt ? `（${md(r.resetAt)} 重置）` : '';
     const memory =
       state.data && state.data.meta && state.data.meta.storage === 'memory'
         ? ' · <span title="不写入磁盘。延迟和错误记录只包含 Kiro 现存的日志。">内存模式</span>'
         : '';
-    return `<div class="caption">${esc(r.label)} · ${esc(mdhm(r.from))} – 现在${esc(reset)}${memory}</div>`;
+    if (r.utc) {
+      const reset = r.resetAt ? `（${utcMd(r.resetAt)} 重置）` : '';
+      return `<div class="caption" title="${esc(UTC_NOTE)}">${esc(r.label)} · ${esc(utcMd(r.from))} – 现在${esc(reset)}${memory}</div>`;
+    }
+    return `<div class="caption">${esc(r.label)} · ${esc(mdhm(r.from))} – 现在${memory}</div>`;
   }
 
   /** @param {string} msg */
@@ -482,8 +499,9 @@ ${card('Credits', cr(t.credits), creditSub, `按 $${d.meta.price}/credit 折算`
     }</div>`;
   }
 
-  /** @param {any[]} daily */
-  function bars(daily) {
+  /** @param {any[]} daily @param {boolean} utc days are UTC calendar days */
+  function bars(daily, utc) {
+    const day = utc ? utcMd : md;
     const W = 600;
     const H = 90;
     const max = Math.max(0, ...daily.map((x) => x.credits));
@@ -491,11 +509,11 @@ ${card('Credits', cr(t.credits), creditSub, `按 $${d.meta.price}/credit 折算`
     const rects = daily
       .map((x, i) => {
         const h = max > 0 ? (x.credits / max) * (H - 4) : 0;
-        return `<rect class="bar-rect" x="${(i * bw + 1).toFixed(1)}" y="${(H - h).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${h.toFixed(1)}"><title>${esc(md(x.day))}：${esc(cr(x.credits))} credits · ${x.requests} 请求</title></rect>`;
+        return `<rect class="bar-rect" x="${(i * bw + 1).toFixed(1)}" y="${(H - h).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${h.toFixed(1)}"><title>${esc(day(x.day))}${utc ? '（UTC）' : ''}：${esc(cr(x.credits))} credits · ${x.requests} 请求</title></rect>`;
       })
       .join('');
-    const first = daily.length ? md(daily[0].day) : '';
-    const last = daily.length ? md(daily[daily.length - 1].day) : '';
+    const first = daily.length ? day(daily[0].day) : '';
+    const last = daily.length ? day(daily[daily.length - 1].day) : '';
     return `<svg class="bars" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${rects}</svg><div class="bars-axis"><span>${esc(first)}</span><span>${esc(last)}</span></div>`;
   }
 
@@ -506,12 +524,12 @@ ${card('Credits', cr(t.credits), creditSub, `按 $${d.meta.price}/credit 折算`
     const resetAt = q.resetAt ? Date.parse(q.resetAt) : NaN;
     const daysLeft = Number.isFinite(resetAt) ? Math.max(0, Math.ceil((resetAt - d.meta.now) / 86400000)) : null;
     const bonus = (q.bonuses || [])
-      .map((/** @type {any} */ b) => meter(b.name, b.used, b.limit, b.expiresAt ? `${md(b.expiresAt)} 到期${b.status && b.status !== 'ACTIVE' ? ` · ${esc(b.status)}` : ''}` : ''))
+      .map((/** @type {any} */ b) => meter(b.name, b.used, b.limit, b.expiresAt ? `${esc(ymd(b.expiresAt, d.meta.now))} 到期${b.status && b.status !== 'ACTIVE' ? ` · ${esc(b.status)}` : ''}` : ''))
       .join('');
     const overage = q.overageEnabled == null ? '未知' : q.overageEnabled ? '已开启' : '未开启';
     return `<section class="panel">
 <div class="panel-head"><h2>${esc(q.plan || 'Kiro 套餐')}</h2><div class="grow"></div><span class="muted">更新于 ${esc(mdhm(q.updatedAt))}</span></div>
-${meter('本计费周期', q.used, q.limit, Number.isFinite(resetAt) ? `${md(resetAt)} 重置，还剩 ${daysLeft} 天` : '')}
+${meter('本计费周期', q.used, q.limit, Number.isFinite(resetAt) ? `<span title="${esc(UTC_NOTE)}">${esc(utcMd(resetAt))} 重置（UTC 0 点，你的时间 ${esc(mdhm(resetAt))}），还剩 ${daysLeft} 天</span>` : '')}
 ${bonus}
 <div class="stats">
 ${stat('超额', overage, ok(q.overageRate) ? `超额单价 $${q.overageRate}/credit` : '')}
@@ -519,7 +537,7 @@ ${stat('本地统计（本周期）', cr(d.cycle.localCredits), '本机会话记
 ${stat('折算美元', usd((q.used ?? 0) * d.meta.price), `按 $${d.meta.price}/credit`)}
 </div>
 </section>
-<section class="panel"><div class="panel-head"><h2>本周期每日 credits（本机）</h2></div>${bars(d.cycle.daily)}</section>`;
+<section class="panel"><div class="panel-head"><h2>本周期每日 credits（本机，按 UTC 日期）</h2></div>${bars(d.cycle.daily, !!d.cycle.utc)}</section>`;
   }
 
   render();

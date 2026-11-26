@@ -2,7 +2,7 @@
   "name": "toys-for-kiro",
   "displayName": "Toys for Kiro",
   "description": "非官方的 Kiro IDE 用量面板：credits、估算 token、上下文占用、请求记录与额度。只读本地数据，与 AWS 无关联。",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "publisher": "moluogh",
   "license": "MIT",
   "icon": "media/icon.png",

@@ -51,4 +51,11 @@ function monthDay(t) {
   return Number.isNaN(d.getTime()) ? '—' : `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-module.exports = { compact, credits, usd, pct, duration, speed, monthDay };
+/** Billing dates (cycle start, reset) as UTC calendar dates, matching Kiro. @param {string | number | null | undefined} t */
+function billingDay(t) {
+  if (t == null) return '—';
+  const d = new Date(t);
+  return Number.isNaN(d.getTime()) ? '—' : `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+}
+
+module.exports = { compact, credits, usd, pct, duration, speed, monthDay, billingDay };

@@ -139,6 +139,7 @@ test('resolveRange derives the billing cycle from the reset date', () => {
   const r = a.resolveRange('cycle', { now, quota: { resetAt: '2026-12-01T00:00:00.000Z' } });
   assert.equal(r.from, Date.parse('2026-11-01T00:00:00Z'));
   assert.equal(r.label, '本计费周期');
+  assert.equal(r.utc, true);
   const fallback = a.resolveRange('cycle', { now, quota: null });
   assert.equal(fallback.from, now - 30 * 86_400_000);
   assert.equal(a.resolveRange('today', { now }).from, a.startOfDay(now));
@@ -154,4 +155,20 @@ test('session stats use exact session credits and estimate model time without lo
   assert.equal(s.timing.modelTimeMs, 6_000);
   assert.equal(s.timing.modelTimeEstimated, true);
   assert.equal(s.requests, 1);
+});
+
+test('billing dates and daily credits follow UTC calendar days', () => {
+  const f = require('../src/format');
+  assert.equal(f.billingDay('2026-12-01T00:00:00.000Z'), '12/1');
+  assert.equal(f.billingDay(null), '—');
+  const cycle = { key: 'cycle', label: '', from: Date.parse('2026-11-01T00:00:00Z'), to: Date.parse('2026-11-03T12:00:00Z'), utc: true };
+  const rows = [
+    { kind: 'main', ts: Date.parse('2026-11-01T00:30:00Z'), credits: 1 },
+    { kind: 'main', ts: Date.parse('2026-11-01T23:59:00Z'), credits: 2 },
+    { kind: 'aux', ts: Date.parse('2026-11-02T00:01:00Z'), credits: 0.5 },
+  ];
+  const days = a.buildDaily(rows, cycle, { utc: true });
+  assert.deepEqual(days.map((d) => new Date(d.day).toISOString().slice(0, 10)), ['2026-11-01', '2026-11-02', '2026-11-03']);
+  assert.deepEqual(days.map((d) => d.credits), [3, 0.5, 0]);
+  assert.deepEqual(days.map((d) => d.requests), [2, 0, 0]);
 });
