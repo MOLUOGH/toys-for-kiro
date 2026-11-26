@@ -1,0 +1,147 @@
+{
+  "name": "toys-for-kiro",
+  "displayName": "Toys for Kiro",
+  "description": "非官方的 Kiro IDE 用量面板：credits、估算 token、上下文占用、请求记录与额度。只读本地数据，与 AWS 无关联。",
+  "version": "0.2.0",
+  "publisher": "moluogh",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MOLUOGH/toys-for-kiro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MOLUOGH/toys-for-kiro/issues"
+  },
+  "homepage": "https://github.com/MOLUOGH/toys-for-kiro#readme",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "kiro",
+    "usage",
+    "credits",
+    "tokens"
+  ],
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "toysForKiro.openDashboard",
+        "title": "打开用量面板",
+        "category": "Toys for Kiro",
+        "icon": "$(pie-chart)"
+      },
+      {
+        "command": "toysForKiro.refresh",
+        "title": "重新扫描本地数据",
+        "category": "Toys for Kiro"
+      },
+      {
+        "command": "toysForKiro.rebuildIndex",
+        "title": "重建本地索引",
+        "category": "Toys for Kiro"
+      },
+      {
+        "command": "toysForKiro.clearData",
+        "title": "清除本地数据",
+        "category": "Toys for Kiro"
+      }
+    ],
+    "configuration": {
+      "title": "Toys for Kiro",
+      "properties": {
+        "toysForKiro.contextWindowTokens": {
+          "type": "number",
+          "default": 1000000,
+          "minimum": 1000,
+          "markdownDescription": "把服务端返回的上下文占用百分比换算成 token 时使用的窗口大小。Kiro 不在本地保存模型窗口，默认按 1,000,000 计算。"
+        },
+        "toysForKiro.modelContextWindows": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "number"
+          },
+          "markdownDescription": "按模型覆盖窗口大小，例如 `{ \"claude-opus-5.5\": 1000000 }`。"
+        },
+        "toysForKiro.creditPriceUsd": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "markdownDescription": "每个 credit 折算的美元价格。`0` 表示使用额度接口返回的超额单价（目前是 $0.04）。"
+        },
+        "toysForKiro.importLegacySessions": {
+          "type": "boolean",
+          "default": true,
+          "description": "导入并显示 Kiro 1.0 之前的旧格式会话（没有 credits，token 为粗略估算）。"
+        },
+        "toysForKiro.storage.mode": {
+          "type": "string",
+          "default": "disk",
+          "enum": [
+            "disk",
+            "memory"
+          ],
+          "enumDescriptions": [
+            "把索引保存在磁盘上。Kiro 删除旧日志后，延迟和错误记录仍然保留。",
+            "只在内存里统计，不写入磁盘，关闭窗口后不留任何数据。每次启动重新扫描；延迟和错误记录只包含 Kiro 现存的日志。"
+          ],
+          "markdownDescription": "本地索引的保存方式。Credits 和 token 统计来自 Kiro 自己的会话文件，两种模式下都完整。"
+        },
+        "toysForKiro.storage.retentionDays": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "markdownDescription": "从 Kiro 日志采集的延迟和错误记录保留多少天，`0` 表示永久保留。不影响 credits 和 token 统计。"
+        },
+        "toysForKiro.statusBar.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "在状态栏显示当前会话的上下文占用和 credits。"
+        },
+        "toysForKiro.refreshIntervalSeconds": {
+          "type": "number",
+          "default": 5,
+          "minimum": 2,
+          "maximum": 300,
+          "description": "扫描本地数据的间隔（秒）。"
+        },
+        "toysForKiro.defaultRange": {
+          "type": "string",
+          "default": "cycle",
+          "enum": [
+            "cycle",
+            "today",
+            "24h",
+            "7d",
+            "30d",
+            "all"
+          ],
+          "enumDescriptions": [
+            "本计费周期",
+            "今天",
+            "最近 24 小时",
+            "最近 7 天",
+            "最近 30 天",
+            "全部时间"
+          ],
+          "description": "用量面板的默认时间范围。"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/node.ps1 --test test/*.test.js",
+    "package": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package.ps1"
+  }
+}
