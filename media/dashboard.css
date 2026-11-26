@@ -127,19 +127,22 @@ select {
 .hm-cell.l2 { background: color-mix(in srgb, var(--c-blue) 52%, transparent); }
 .hm-cell.l3 { background: color-mix(in srgb, var(--c-blue) 76%, transparent); }
 .hm-cell.l4 { background: var(--c-blue); }
-.hm-axis, .hm-label { color: var(--muted); font-size: 0.8em; white-space: nowrap; }
-.heatmap.hourly { display: grid; grid-template-columns: 44px repeat(24, minmax(0, 1fr)); gap: 3px; }
-.heatmap.hourly .hm-cell { height: 16px; }
-.heatmap.daily .hm-grid {
+.hm-axis { color: var(--muted); font-size: 0.8em; white-space: nowrap; overflow: visible; }
+/* Square cells that fill the width; with few columns, cells stop growing at about 22px. */
+.heatmap { max-width: calc(var(--cols) * 25px); }
+.hm-grid, .hm-axis-row {
   display: grid;
-  grid-auto-flow: column;
-  grid-template-rows: repeat(7, auto);
   grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
   gap: 3px;
 }
-.heatmap.daily .hm-cell { aspect-ratio: 1; max-height: 16px; }
-.hm-axis-row { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 3px; margin-top: 4px; }
-.hm-axis-row .hm-axis { overflow: visible; }
+.hm-grid { grid-auto-flow: column; grid-template-rows: repeat(7, auto); }
+.hm-grid .hm-cell { aspect-ratio: 1; }
+.hm-axis-row { margin-top: 6px; }
+.hm-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 10px; color: var(--muted); font-size: 0.85em; }
+.hm-legend { display: inline-flex; align-items: center; gap: 3px; }
+.hm-legend .hm-cell { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.hm-legend .hm-cell:first-child { margin-left: 4px; }
+.hm-legend .hm-cell:last-child { margin-right: 4px; }
 
 /* health */
 .health { display: grid; grid-template-columns: minmax(120px, 180px) 1fr 48px; gap: 8px 12px; align-items: center; }

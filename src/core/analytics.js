@@ -9,7 +9,13 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const SPARK_BUCKETS = 40;
 const HEALTH_BUCKETS = 36;
-const MAX_WEEKS = 53;
+// Heatmap: always 7 rows, at most 53 columns. Each cell covers the smallest of
+// these steps that fits the range; past 12 h the cells become days.
+const HM_ROWS = 7;
+const HM_MAX_COLS = 53;
+const HM_MAX_CELLS = HM_ROWS * HM_MAX_COLS;
+const MINUTE = 60_000;
+const HM_UNITS = [5, 10, 15, 20, 30, 60, 120, 180, 240, 360, 480, 720].map((m) => m * MINUTE);
 
 const RANGE_LABELS = /** @type {const} */ ({
   cycle: '本计费周期',
@@ -160,6 +166,30 @@ function bucketOf(from, to, n, t) {
   return i < 0 || i >= n ? -1 : i;
 }
 
+/**
+ * Cell boundaries on the local wall clock (12:00, 14:00, ...), so they stay on
+ * round hours across daylight-saving changes. Returns null if more than `max`
+ * cells would be needed.
+ * @param {number} from @param {number} to @param {number} stepMin @param {number} max
+ */
+function localBounds(from, to, stepMin, max) {
+  const d = new Date(from);
+  const y = d.getFullYear();
+  const mo = d.getMonth();
+  const day = d.getDate();
+  const first = Math.floor((d.getHours() * 60 + d.getMinutes()) / stepMin) * stepMin;
+  /** @type {number[]} */
+  const out = [];
+  for (let i = 0; out.length <= max; i++) {
+    const t = new Date(y, mo, day, 0, first + i * stepMin).getTime();
+    // Times inside a skipped DST hour normalize forward; keep boundaries increasing.
+    if (out.length && t <= out[out.length - 1]) continue;
+    out.push(t);
+    if (t >= to) return out;
+  }
+  return null;
+}
+
 /** @param {any[]} rows @param {Range} range */
 function buildHeatmap(rows, range) {
   const blank = () => ({ requests: 0, tokens: 0, credits: 0 });
@@ -171,39 +201,67 @@ function buildHeatmap(rows, range) {
     }
     c.credits += r.credits;
   };
-  if (range.to - range.from <= 8 * DAY) {
-    /** @type {number[]} */
-    const days = [];
-    for (let d = startOfDay(range.from); d < range.to; d = addDays(d, 1)) days.push(d);
-    const index = new Map(days.map((d, i) => [d, i]));
-    const cells = days.map(() => Array.from({ length: 24 }, blank));
-    for (const r of rows) {
-      if (r.ts == null) continue;
-      const i = index.get(startOfDay(r.ts));
-      if (i != null) add(cells[i][new Date(r.ts).getHours()], r);
-    }
-    return { mode: 'hourly', days, cells };
+  // Window to draw. Ranges shorter than a day show the whole day, so "today"
+  // keeps its shape in the morning.
+  let from = range.from;
+  let to = range.to;
+  if (to - from < DAY) {
+    from = startOfDay(from);
+    to = Math.max(to, addDays(from, 1));
   }
-  const start = startOfWeek(Math.max(range.from, addDays(startOfWeek(range.to - 1), -7 * (MAX_WEEKS - 1))));
-  /** @type {number[]} */
-  const weeks = [];
-  for (let w = start; w < range.to; w = addDays(w, 7)) weeks.push(w);
-  const index = new Map(weeks.map((w, i) => [w, i]));
-  const firstDay = startOfDay(range.from);
-  /** @type {Array<Array<ReturnType<typeof blank> | null>>} */
-  const cells = weeks.map((w) =>
-    Array.from({ length: 7 }, (_, d) => {
-      const day = addDays(w, d);
-      return day < firstDay || day >= range.to ? null : blank();
+
+  /** @type {number[]} bucket boundaries, length = buckets + 1 */
+  let bounds = [];
+  let unit = DAY;
+  for (const u of HM_UNITS) {
+    const b = localBounds(from, to, u / MINUTE, HM_MAX_CELLS);
+    if (b) {
+      bounds = b;
+      unit = u;
+      break;
+    }
+  }
+  if (!bounds.length) {
+    // Daily cells, Monday on top, last 53 weeks at most (GitHub layout).
+    const s = Math.max(startOfWeek(from), addDays(startOfWeek(to - 1), -7 * (HM_MAX_COLS - 1)));
+    for (let d = s; d < to; d = addDays(d, 1)) bounds.push(d);
+    bounds.push(addDays(bounds[bounds.length - 1], 1));
+  }
+
+  const n = bounds.length - 1;
+  const cols = Math.ceil(n / HM_ROWS);
+  /** @type {Array<Array<(ReturnType<typeof blank> & { t0: number, t1: number }) | null>>} */
+  const cells = Array.from({ length: cols }, (_, c) =>
+    Array.from({ length: HM_ROWS }, (_, r) => {
+      const i = c * HM_ROWS + r;
+      if (i >= n) return null;
+      const t0 = bounds[i];
+      const t1 = bounds[i + 1];
+      // Padding before the range and time that has not happened yet stay blank.
+      return t1 <= range.from || t0 >= range.to ? null : { t0, t1, ...blank() };
     }),
   );
   for (const r of rows) {
-    if (r.ts == null) continue;
-    const col = index.get(startOfWeek(r.ts));
-    const c = col == null ? null : cells[col][(new Date(r.ts).getDay() + 6) % 7];
+    if (r.ts == null || r.ts < bounds[0] || r.ts >= bounds[n]) continue;
+    let lo = 0;
+    let hi = n - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (bounds[mid] <= r.ts) lo = mid;
+      else hi = mid - 1;
+    }
+    const c = cells[Math.floor(lo / HM_ROWS)][lo % HM_ROWS];
     if (c) add(c, r);
   }
-  return { mode: 'daily', weeks, cells };
+  return {
+    unit,
+    rows: HM_ROWS,
+    cols,
+    start: bounds[0],
+    end: bounds[n],
+    colStarts: Array.from({ length: cols }, (_, c) => bounds[c * HM_ROWS]),
+    cells,
+  };
 }
 
 /** @param {any[]} main @param {Range} range */

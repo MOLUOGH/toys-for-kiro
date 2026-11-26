@@ -68,25 +68,70 @@ test('overview totals, heatmap and health', () => {
   assert.ok(Math.abs(o.totals.credits - 0.8) < 1e-9);
   assert.ok(Math.abs(o.totals.avgCredits - 0.375) < 1e-9);
   assert.equal(o.totals.avgTtftMs, 2000);
-  assert.equal(o.heatmap.mode, 'hourly');
-  const hour = o.heatmap.cells.flat().find((c) => c.requests > 0);
-  assert.equal(hour.requests, 3);
-  assert.ok(Math.abs(hour.credits - 0.8) < 1e-9);
+  assert.equal(o.heatmap.unit, 5 * 60_000); // a 2-hour range is drawn as a whole day of 5-minute cells
+  const busy = o.heatmap.cells.flat().filter((c) => c && c.requests > 0);
+  assert.equal(busy.length, 1); // everything happened within 10:00–10:05
+  assert.equal(busy[0].requests, 3);
+  assert.equal(busy[0].t0, T0);
+  assert.ok(Math.abs(busy[0].credits - 0.8) < 1e-9);
   assert.equal(o.health.overall, 0.5);
   assert.deepEqual(o.health.models.map((m) => [m.model, m.rate]), [['m1', 0.5], ['m2', null]]);
   assert.equal(o.distribution.credits.find((x) => x.label.startsWith('辅助')).value, 0.05);
 });
 
-test('daily heatmap covers at most 53 weeks and blanks days outside the range', () => {
-  const to = new Date(2026, 10, 25, 12).getTime();
-  const range = { key: 'all', label: '', from: to - 400 * 86_400_000, to };
-  const h = a.buildHeatmap([], range);
-  assert.equal(h.mode, 'daily');
-  assert.ok(h.weeks.length <= 53 && h.weeks.length >= 52);
-  // 2026-11-25 is a Wednesday; 31 days earlier is a Sunday, so the first week starts before the range.
-  const short = a.buildHeatmap([], { key: '30d', label: '', from: to - 31 * 86_400_000, to });
-  assert.ok(short.cells[0].some((c) => c === null));
-  assert.ok(short.cells.at(-1).some((c) => c === null)); // days after today
+test('heatmap picks a cell size that fills 7 rows and up to 53 columns for every range', () => {
+  const MIN = 60_000;
+  const H = 60 * MIN;
+  const D = 24 * H;
+  const now = new Date(2026, 10, 25, 9, 30).getTime(); // Wednesday morning
+  const cases = [
+    // [range, expected cell size]
+    [{ from: a.startOfDay(now), to: now + 1 }, 5 * MIN], // today: whole day
+    [{ from: now - D, to: now + 1 }, 5 * MIN],
+    [{ from: now - 7 * D, to: now + 1 }, 30 * MIN],
+    [{ from: now - 30 * D, to: now + 1 }, 2 * H], // the billing-cycle case from the screenshot
+    [{ from: now - 90 * D, to: now + 1 }, 6 * H],
+    [{ from: now - 400 * D, to: now + 1 }, D],
+  ];
+  for (const [r, unit] of cases) {
+    const h = a.buildHeatmap([], { key: 'x', label: '', ...r });
+    const label = `${Math.round((r.to - r.from) / H)}h range`;
+    assert.equal(h.unit, unit, label);
+    assert.ok(h.cols <= 53, `${label}: ${h.cols} columns`);
+    assert.ok(h.cols >= 27, `${label}: only ${h.cols} columns`);
+    assert.equal(h.cells.length, h.cols);
+    assert.ok(h.cells.every((col) => col.length === 7));
+    assert.equal(h.colStarts.length, h.cols);
+    // Cells are contiguous and cover the range.
+    const cells = h.cells.flat().filter(Boolean);
+    for (let i = 1; i < cells.length; i++) assert.equal(cells[i].t0, cells[i - 1].t1, `${label}: gap at ${i}`);
+    assert.ok(cells.at(-1).t1 >= r.to - 1, `${label}: reaches now`);
+    // Ranges longer than 53 weeks show only the most recent 53 weeks.
+    if (unit < D) assert.ok(cells[0].t0 <= r.from, `${label}: covers the start`);
+    // Sub-day cells start on round local times, also after the DST change on 2026-11-01.
+    if (unit < D) assert.ok(cells.every((c) => (new Date(c.t0).getHours() * 60 + new Date(c.t0).getMinutes()) % (unit / MIN) === 0), `${label}: aligned`);
+  }
+  // Today: cells after now stay blank.
+  const today = a.buildHeatmap([], { key: 'today', label: '', from: a.startOfDay(now), to: now + 1 });
+  assert.equal(today.end - today.start, D);
+  assert.ok(today.cells.flat().filter(Boolean).every((c) => c.t0 <= now));
+  // Daily cells: weeks start on Monday, at most 53 of them.
+  const year = a.buildHeatmap([], { key: 'all', label: '', from: now - 400 * D, to: now + 1 });
+  assert.equal(new Date(year.start).getDay(), 1);
+  assert.equal(year.cols, 53);
+});
+
+test('heatmap puts each request in the cell that contains it', () => {
+  const now = new Date(2026, 10, 25, 9, 30).getTime();
+  const from = now - 30 * 86_400_000;
+  const t = new Date(2026, 10, 24, 13, 59).getTime(); // falls in the 12:00–14:00 cell
+  const rows = a.enrichRows([{ kind: 'main', ts: t, contextPct: 1, credits: 2, estOutputTokens: 0, status: 'ok' }], settings);
+  const h = a.buildHeatmap(rows, { key: '30d', label: '', from, to: now + 1 });
+  const hit = h.cells.flat().filter((c) => c && c.requests);
+  assert.equal(hit.length, 1);
+  assert.equal(hit[0].t0, new Date(2026, 10, 24, 12, 0).getTime());
+  assert.equal(hit[0].credits, 2);
+  assert.equal(hit[0].tokens, 10_000);
 });
 
 test('resolveRange derives the billing cycle from the reset date', () => {

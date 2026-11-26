@@ -7,7 +7,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $root = Split-Path -Parent $PSScriptRoot
 $pkg = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'package.json') | ConvertFrom-Json
-$include = @('package.json', 'README.md', 'LICENSE', 'src', 'media')
+$include = @('package.json', 'README.md', 'LICENSE', 'CHANGELOG.md', 'src', 'media')
 
 function Escape-Xml([string]$s) { [System.Security.SecurityElement]::Escape($s) }
 

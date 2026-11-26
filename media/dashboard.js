@@ -246,39 +246,60 @@
     return `<div class="seg">${options.map(([k, l]) => `<button class="${current === k ? 'active' : ''}" data-action="${action}" data-value="${k}">${esc(l)}</button>`).join('')}</div>`;
   }
 
+  const DAY_MS = 86400000;
+
+  /** @param {number} t */
+  const hm = (t) => {
+    const d = new Date(t);
+    return pad(d.getHours()) + ':' + pad(d.getMinutes());
+  };
+
+  /** "5 分钟" / "2 小时" / "1 天" @param {number} unit */
+  function unitLabel(unit) {
+    if (unit >= DAY_MS) return Math.round(unit / DAY_MS) + ' 天';
+    if (unit >= 3600000) return unit / 3600000 + ' 小时';
+    return unit / 60000 + ' 分钟';
+  }
+
   /** @param {any} h @param {string} metric */
   function heatmap(h, metric) {
     let max = 0;
     for (const col of h.cells) for (const c of col) if (c && c[metric] > max) max = c[metric];
-    /** @param {any} c @param {string} label */
-    const cell = (c, label) => {
+    const daily = h.unit >= DAY_MS;
+    /** @param {any} c */
+    const cell = (c) => {
       if (!c) return '<div class="hm-cell out"></div>';
       const v = c[metric];
       const lv = v > 0 && max > 0 ? Math.max(1, Math.ceil(Math.sqrt(v / max) * 4)) : 0;
-      const tip = `${label}\n请求 ${int(c.requests)} · Token ${compact(c.tokens)} · Credits ${cr(c.credits)}`;
+      const when = daily ? md(c.t0) : `${md(c.t0)} ${hm(c.t0)}–${hm(c.t1)}`;
+      const tip = `${when}\n请求 ${int(c.requests)} · Token ${compact(c.tokens)} · Credits ${cr(c.credits)}`;
       return `<div class="hm-cell l${lv}" title="${esc(tip)}"></div>`;
     };
-    if (h.mode === 'hourly') {
-      const rows = h.days
-        .map((/** @type {number} */ day, /** @type {number} */ i) => `<div class="hm-label">${md(day)}</div>` + h.cells[i].map((/** @type {any} */ c, /** @type {number} */ hr) => cell(c, `${md(day)} ${pad(hr)}:00`)).join(''))
-        .join('');
-      const axis = Array.from({ length: 24 }, (_, i) => `<div class="hm-axis">${i % 6 === 0 ? pad(i) + ':00' : ''}</div>`).join('');
-      return `<div class="heatmap hourly">${rows}<div></div>${axis}</div>`;
-    }
-    const cols = h.weeks.length;
-    const cells = h.weeks
-      .map((/** @type {number} */ w, /** @type {number} */ ci) => h.cells[ci].map((/** @type {any} */ c, /** @type {number} */ d) => cell(c, md(w + d * 86400000))).join(''))
-      .join('');
-    let last = -1;
-    const axis = h.weeks
-      .map((/** @type {number} */ w, /** @type {number} */ i) => {
-        const m = new Date(w).getMonth();
-        const show = m !== last && (i === 0 || new Date(w).getDate() <= 7);
-        if (show) last = m;
-        return `<div class="hm-axis">${show ? md(w) : ''}</div>`;
+    const grid = h.cells.map((/** @type {any[]} */ col) => col.map(cell).join('')).join('');
+
+    // Axis labels, spaced so they do not overlap. Windows up to 36 h are labelled
+    // by time of day, longer ones by date.
+    const byTime = h.end - h.start <= 36 * 3600000;
+    const gap = byTime ? 6 : 5;
+    let lastCol = -gap;
+    let lastDay = '';
+    const axis = h.colStarts
+      .map((/** @type {number} */ t, /** @type {number} */ i) => {
+        let text = '';
+        if (byTime) {
+          if (i - lastCol >= gap) text = hm(t);
+        } else {
+          const day = md(t);
+          if (day !== lastDay && i - lastCol >= gap) text = day;
+          if (text) lastDay = day;
+        }
+        if (text) lastCol = i;
+        return `<div class="hm-axis">${esc(text)}</div>`;
       })
       .join('');
-    return `<div class="heatmap daily" style="--cols:${cols}"><div class="hm-grid">${cells}</div><div class="hm-axis-row">${axis}</div></div>`;
+    const legend = [0, 1, 2, 3, 4].map((l) => `<span class="hm-cell l${l}"></span>`).join('');
+    return `<div class="heatmap" style="--cols:${h.cols}"><div class="hm-grid">${grid}</div><div class="hm-axis-row">${axis}</div></div>
+<div class="hm-foot"><span>每格 ${esc(unitLabel(h.unit))}${daily ? '，每列一周（周一在上）' : '，从上到下、从左到右按时间排列'}</span><span class="hm-legend">少${legend}多</span></div>`;
   }
 
   /** @param {any} h */

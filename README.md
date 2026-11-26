@@ -33,7 +33,7 @@ Kiro IDE 的非官方用量面板。只读取本机的 Kiro 会话记录和日�
 
 ```powershell
 .\scripts\package.ps1
-& "<Kiro 安装目录>\bin\kiro.cmd" --install-extension dist\toys-for-kiro-0.2.0.vsix
+& "<Kiro 安装目录>\bin\kiro.cmd" --install-extension dist\toys-for-kiro-0.2.1.vsix
 ```
 
 安装后执行 `Developer: Reload Window`。卸载：在扩展视图里卸载 Toys for Kiro。本扩展的索引保存在 Kiro 的 `globalStorage\moluogh.toys-for-kiro` 目录。
