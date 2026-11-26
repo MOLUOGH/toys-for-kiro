@@ -119,6 +119,31 @@ function fakeDom() {
   return { sandbox, root, handlers, posted };
 }
 
+/**
+ * Run media/i18n.js + media/dashboard.js in a fake DOM and wire them to the real
+ * panel controller. Returns after the overview has rendered.
+ */
+async function bootDashboard(panel) {
+  const dom = fakeDom();
+  const ctx = vm.createContext(dom.sandbox);
+  for (const f of ['i18n.js', 'dashboard.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'media', f), 'utf8'), ctx);
+  assert.equal(dom.posted.at(-1).type, 'ready');
+  const deliver = (m) => dom.handlers['win:message']({ data: m });
+  panel.deliver = deliver;
+  // Route webview -> extension -> webview through the real panel controller.
+  const pump = async () => {
+    const msg = dom.posted.at(-1);
+    panel.posted.length = 0;
+    await panel.send(msg);
+    for (const m of panel.posted) deliver(m);
+  };
+  const click = (attrs) =>
+    dom.handlers['doc:click']({ target: Object.assign(new dom.sandbox.Element(), { closest: () => ({ dataset: attrs }) }) });
+  await pump(); // ready -> init -> load(overview)
+  await pump(); // load -> data
+  return { dom, pump, click };
+}
+
 /** Fixture + stubbed vscode + activated extension, torn down after the test. */
 async function activateWith(t, config = {}) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'toys-for-kiro-smoke-'));
@@ -187,27 +212,11 @@ test('extension activates, indexes data and renders every view', async (t) => {
   assert.match(panel.webview.html, /Content-Security-Policy/);
   assert.match(panel.webview.html, /script-src 'nonce-/);
 
-  const dom = fakeDom();
-  const script = fs.readFileSync(path.join(__dirname, '..', 'media', 'dashboard.js'), 'utf8');
-  vm.runInNewContext(script, dom.sandbox);
-  assert.equal(dom.posted.at(-1).type, 'ready');
-  const deliver = (m) => dom.handlers['win:message']({ data: m });
-
-  // Route webview -> extension -> webview through the real panel controller.
-  const pump = async () => {
-    const msg = dom.posted.at(-1);
-    panel.posted.length = 0;
-    await panel.send(msg);
-    for (const m of panel.posted) deliver(m);
-  };
-  await pump(); // ready -> init -> load(overview)
-  await pump(); // load -> data
+  const { dom, pump, click } = await bootDashboard(panel);
   assert.match(dom.root.innerHTML, /请求数/);
   assert.match(dom.root.innerHTML, /用量热力图/);
   assert.match(dom.root.innerHTML, /claude-opus-5\.5/);
 
-  const click = (attrs) =>
-    dom.handlers['doc:click']({ target: Object.assign(new dom.sandbox.Element(), { closest: () => ({ dataset: attrs }) }) });
   for (const [view, marker] of [
     ['requests', /ServerConnectionResetError/],
     ['sessions', /演示 &lt;会话&gt; \| test/],
@@ -271,4 +280,56 @@ test('memory mode writes nothing; switching, clearing and retention work', async
   assert.equal(api.app.store.inMemory, true);
   assert.equal(fs.existsSync(dbFile), false);
   assert.equal(status(), EXPECTED_STATUS);
+});
+
+test('English UI: status bar, every dashboard view, and switching language live', async (t) => {
+  const { api, stub } = await activateWith(t, { language: 'en' });
+  const tip = stub.statusItems[0].tooltip.value;
+  assert.match(tip, /Toys for Kiro · current session/);
+  assert.match(tip, /Turns \/ requests \/ tool calls/);
+  assert.doesNotMatch(tip.replace('演示 \\<会话\\> \\| test', ''), /[\u4e00-\u9fff]/, 'no Chinese except the session title');
+
+  await stub.vscode.commands.executeCommand('toysForKiro.openDashboard', {});
+  const panel = stub.panels[0];
+  assert.match(panel.webview.html, /<html lang="en">/);
+  assert.match(panel.webview.html, /i18n\.js/);
+  const { dom, pump, click } = await bootDashboard(panel);
+  // Strip the fixture's Chinese session title before looking for untranslated text.
+  const visible = () => dom.root.innerHTML.replace(/演示 &lt;会话&gt; \| test/g, '');
+  assert.match(dom.root.innerHTML, /Usage heatmap/);
+  assert.match(dom.root.innerHTML, /Model health/);
+  for (const view of ['overview', 'requests', 'sessions', 'quota']) {
+    click({ action: 'view', view });
+    await pump();
+    assert.doesNotMatch(visible(), /[\u4e00-\u9fff]/, `view ${view} has untranslated text`);
+  }
+  click({ action: 'session', id: 'sess_demo' });
+  await pump();
+  assert.match(dom.root.innerHTML, /Time to first token/);
+  assert.doesNotMatch(visible(), /[\u4e00-\u9fff]/, 'session card has untranslated text');
+
+  // Switch to Chinese without reopening: the panel and the status bar follow.
+  stub.config.language = 'zh-CN';
+  panel.posted.length = 0;
+  await api.app.onSettingsChanged();
+  assert.deepEqual({ ...panel.posted.find((m) => m.type === 'lang') }, { type: 'lang', lang: 'zh' });
+  for (const m of panel.posted) panel.deliver(m);
+  assert.match(dom.root.innerHTML, /首包延迟/);
+  assert.match(stub.statusItems[0].tooltip.value, /当前会话/);
+});
+
+test('both languages define the same keys', () => {
+  const { messages, resolveLang } = require('../media/i18n');
+  assert.deepEqual(Object.keys(messages.en).sort(), Object.keys(messages.zh).sort());
+  const nlsEn = Object.keys(require('../package.nls.json')).sort();
+  const nlsZh = Object.keys(require('../package.nls.zh-cn.json')).sort();
+  assert.deepEqual(nlsEn, nlsZh);
+  const manifest = fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8');
+  for (const m of manifest.matchAll(/"%([\w.]+)%"/g)) assert.ok(nlsEn.includes(m[1]), `package.nls.json is missing ${m[1]}`);
+  assert.equal(resolveLang('auto', 'zh-cn'), 'zh');
+  assert.equal(resolveLang('auto', 'zh-tw'), 'zh');
+  assert.equal(resolveLang('auto', 'en'), 'en');
+  assert.equal(resolveLang('auto', 'ja'), 'en');
+  assert.equal(resolveLang('en', 'zh-cn'), 'en');
+  assert.equal(resolveLang('zh-CN', 'en'), 'zh');
 });

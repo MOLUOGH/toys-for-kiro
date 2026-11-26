@@ -4,7 +4,7 @@
 const { estimateTokens } = require('./estimate');
 
 /** Bump when parsing rules change so stored sessions get re-parsed. */
-const PARSER_VERSION = 1;
+const PARSER_VERSION = 2;
 
 const EPS = 1e-9;
 const TYPE_RE = /"payload":\{"type":"([a-z_]+)"/;

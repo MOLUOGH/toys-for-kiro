@@ -76,7 +76,7 @@ test('overview totals, heatmap and health', () => {
   assert.ok(Math.abs(busy[0].credits - 0.8) < 1e-9);
   assert.equal(o.health.overall, 0.5);
   assert.deepEqual(o.health.models.map((m) => [m.model, m.rate]), [['m1', 0.5], ['m2', null]]);
-  assert.equal(o.distribution.credits.find((x) => x.label.startsWith('辅助')).value, 0.05);
+  assert.equal(o.distribution.credits.find((x) => x.label === '@aux').value, 0.05);
 });
 
 test('heatmap picks a cell size that fills 7 rows and up to 53 columns for every range', () => {
@@ -138,10 +138,11 @@ test('resolveRange derives the billing cycle from the reset date', () => {
   const now = Date.parse('2026-11-26T06:00:00Z');
   const r = a.resolveRange('cycle', { now, quota: { resetAt: '2026-12-01T00:00:00.000Z' } });
   assert.equal(r.from, Date.parse('2026-11-01T00:00:00Z'));
-  assert.equal(r.label, '本计费周期');
+  assert.equal(r.label, 'range.cycle');
   assert.equal(r.utc, true);
   const fallback = a.resolveRange('cycle', { now, quota: null });
   assert.equal(fallback.from, now - 30 * 86_400_000);
+  assert.equal(fallback.label, 'range.cycleFallback');
   assert.equal(a.resolveRange('today', { now }).from, a.startOfDay(now));
 });
 

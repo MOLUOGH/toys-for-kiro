@@ -159,7 +159,7 @@ async function parseLegacy(legacyDir, opts = {}) {
     let entry = out.get(sid);
     if (!entry) {
       const s = emptySession(sid, 'legacy');
-      s.title = '旧版执行（未匹配到会话）';
+      s.title = ''; // the UI shows a translated name for UNLINKED_ID
       entry = { session: s, rows: [] };
       out.set(sid, entry);
     }

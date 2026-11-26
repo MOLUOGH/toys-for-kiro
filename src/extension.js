@@ -9,13 +9,14 @@ const { Ingestor } = require('./core/ingest');
 const { buildPayload, findActiveSession, sessionStats } = require('./core/views');
 const { SessionStatusBar } = require('./statusBar');
 const { DashboardPanel } = require('./panel');
+const i18n = require('../media/i18n');
 
 const QUOTA_INTERVAL_MS = 60_000;
 const PANEL_NOTIFY_MIN_MS = 5_000;
 const PRUNE_INTERVAL_MS = 3_600_000;
 const DB_FILE = 'toys-for-kiro.db';
 
-/** @returns {import('./core/views').Settings & { storageMode: 'disk' | 'memory', retentionDays: number, statusBarEnabled: boolean, refreshIntervalSeconds: number }} */
+/** @returns {import('./core/views').Settings & { storageMode: 'disk' | 'memory', retentionDays: number, statusBarEnabled: boolean, refreshIntervalSeconds: number, lang: 'zh' | 'en' }} */
 function readSettings() {
   const c = vscode.workspace.getConfiguration('toysForKiro');
   const windows = c.get('modelContextWindows', {});
@@ -29,6 +30,7 @@ function readSettings() {
     retentionDays: Math.max(0, Math.floor(Number(c.get('storage.retentionDays', 0)) || 0)),
     statusBarEnabled: c.get('statusBar.enabled', true) !== false,
     refreshIntervalSeconds: Math.min(300, Math.max(2, Number(c.get('refreshIntervalSeconds', 5)) || 5)),
+    lang: i18n.resolveLang(String(c.get('language', 'auto')), vscode.env?.language),
   };
 }
 
@@ -146,7 +148,7 @@ class App {
     }
     const folders = (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath);
     const session = findActiveSession(this.store, folders);
-    this.statusBar.update(session ? { ...sessionStats(this.store, this.settings, session), storage: this.settings.storageMode } : null);
+    this.statusBar.update(session ? { ...sessionStats(this.store, this.settings, session), storage: this.settings.storageMode } : null, this.settings.lang);
   }
 
   /** @param {any} msg */
@@ -191,7 +193,7 @@ class App {
         this.setStore(openStore(this.context, mode));
       } catch (e) {
         this.log.error(e instanceof Error ? e : String(e));
-        void vscode.window.showErrorMessage(`Toys for Kiro 无法打开本地索引，已改用内存模式：${e instanceof Error ? e.message : e}`);
+        void vscode.window.showErrorMessage(this.t('msg.memoryFallback', { e: e instanceof Error ? e.message : e }));
         this.setStore(openStore(this.context, 'memory'));
       }
     }
@@ -230,12 +232,9 @@ class App {
     this.log.info(`storage=${mode}`);
     await this.fullScan();
     if (mode === 'memory' && vscode.window.state?.focused !== false && this.diskIndexExists()) {
-      const pick = await vscode.window.showInformationMessage(
-        'Toys for Kiro 已切换到内存模式，不再写入磁盘。之前保存的本地索引还在磁盘上，要删除吗？',
-        '删除',
-        '保留',
-      );
-      if (pick === '删除') await this.clearData();
+      const del = this.t('msg.delete');
+      const pick = await vscode.window.showInformationMessage(this.t('msg.switchedToMemory'), del, this.t('msg.keep'));
+      if (pick === del) await this.clearData();
     }
   }
 
@@ -243,6 +242,10 @@ class App {
     const prev = this.settings;
     this.settings = readSettings();
     if (prev.refreshIntervalSeconds !== this.settings.refreshIntervalSeconds) this.schedule();
+    if (prev.lang !== this.settings.lang) {
+      DashboardPanel.current?.setLang(this.settings.lang);
+      this.updateStatusBar();
+    }
     if (prev.storageMode !== this.settings.storageMode) {
       await this.switchStorage(this.settings.storageMode);
       return;
@@ -250,6 +253,11 @@ class App {
     const legacy = !prev.importLegacySessions && this.settings.importLegacySessions;
     await this.exclusive(() => {});
     await this.tick({ legacy, force: true });
+  }
+
+  /** @param {string} key @param {Record<string, unknown>} [params] */
+  t(key, params) {
+    return i18n.t(this.settings.lang, key, params);
   }
 
   dispose() {
@@ -260,12 +268,11 @@ class App {
   }
 }
 
-/** @param {'none' | 'deleted' | 'cleared'} result @param {'disk' | 'memory'} mode */
-function clearMessage(result, mode) {
-  const rebuilt = mode === 'disk' ? '已从 Kiro 现有文件重新生成。' : '';
-  if (result === 'none') return mode === 'disk' ? `磁盘上没有旧索引。${rebuilt}` : '磁盘上没有 Toys for Kiro 的本地索引。';
-  if (result === 'cleared') return `本地索引已清空（另一个 Kiro 窗口正在使用该文件，无法直接删除）。${rebuilt}`;
-  return `已删除本地索引。${rebuilt}`;
+/** @param {App} app @param {'none' | 'deleted' | 'cleared'} result @param {'disk' | 'memory'} mode */
+function clearMessage(app, result, mode) {
+  const rebuilt = mode === 'disk' ? app.t('msg.rebuilt') : '';
+  if (result === 'none') return mode === 'disk' ? app.t('msg.noneDisk', { rebuilt }) : app.t('msg.noneMemory');
+  return app.t(result === 'cleared' ? 'msg.cleared' : 'msg.deleted', { rebuilt });
 }
 
 /** @param {vscode.ExtensionContext} context */
@@ -280,7 +287,7 @@ function activate(context) {
     store = openStore(context, settings.storageMode);
   } catch (e) {
     log.error(e instanceof Error ? e : String(e));
-    void vscode.window.showErrorMessage(`Toys for Kiro 无法打开本地索引（需要 Node 22.13+ 的 node:sqlite）：${e instanceof Error ? e.message : e}`);
+    void vscode.window.showErrorMessage(i18n.t(settings.lang, 'msg.openFailed', { e: e instanceof Error ? e.message : e }));
     return undefined;
   }
 
@@ -289,6 +296,7 @@ function activate(context) {
     buildPayload: (/** @type {any} */ m) => app.buildPayload(m),
     refresh: () => app.refresh(),
     defaultRange: () => app.settings.defaultRange,
+    lang: () => app.settings.lang,
   };
 
   context.subscriptions.push(
@@ -296,31 +304,26 @@ function activate(context) {
       DashboardPanel.show(context, host, opts && typeof opts === 'object' ? opts : {});
     }),
     vscode.commands.registerCommand('toysForKiro.refresh', () =>
-      vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: 'Toys for Kiro：扫描本地数据' }, () => app.refresh()),
+      vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: app.t('msg.scanning') }, () => app.refresh()),
     ),
     vscode.commands.registerCommand('toysForKiro.rebuildIndex', async () => {
-      const ok = await vscode.window.showWarningMessage(
-        '重新解析全部会话？已采集的请求日志会保留（Kiro 已删除的旧日志无法恢复）。',
-        { modal: true },
-        '重建',
-      );
-      if (ok !== '重建') return;
-      await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Toys for Kiro：重建索引' }, () => app.rebuild());
+      const rebuild = app.t('msg.rebuild');
+      const ok = await vscode.window.showWarningMessage(app.t('msg.rebuildConfirm'), { modal: true }, rebuild);
+      if (ok !== rebuild) return;
+      await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: app.t('msg.rebuilding') }, () => app.rebuild());
     }),
     vscode.commands.registerCommand('toysForKiro.clearData', async () => {
       const mode = app.settings.storageMode;
       if (mode === 'memory' && !app.diskIndexExists()) {
-        void vscode.window.showInformationMessage(clearMessage('none', mode));
+        void vscode.window.showInformationMessage(clearMessage(app, 'none', mode));
         return 'none';
       }
-      const detail =
-        mode === 'disk'
-          ? '删除后会从 Kiro 现有的会话和日志重新生成。Kiro 已删除的旧日志里的延迟和错误记录会永久丢失。Kiro 自己的会话和日志不受影响。'
-          : '删除磁盘上残留的索引文件。当前内存里的统计不受影响。';
-      const ok = await vscode.window.showWarningMessage('删除 Toys for Kiro 的本地索引？', { modal: true, detail }, '删除');
-      if (ok !== '删除') return undefined;
-      const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Toys for Kiro：清除本地数据' }, () => app.clearData());
-      void vscode.window.showInformationMessage(clearMessage(result, mode));
+      const detail = app.t(mode === 'disk' ? 'msg.clearDetailDisk' : 'msg.clearDetailMemory');
+      const del = app.t('msg.delete');
+      const ok = await vscode.window.showWarningMessage(app.t('msg.clearConfirm'), { modal: true, detail }, del);
+      if (ok !== del) return undefined;
+      const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: app.t('msg.clearing') }, () => app.clearData());
+      void vscode.window.showInformationMessage(clearMessage(app, result, mode));
       return result;
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {

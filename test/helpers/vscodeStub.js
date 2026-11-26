@@ -108,6 +108,7 @@ function createStub() {
       },
       withProgress: async (_o, fn) => fn({ report() {} }),
     },
+    env: { language: 'zh-cn' },
     workspace: {
       workspaceFolders: [],
       getConfiguration: () => ({ get: (k, d) => (k in config ? config[k] : d) }),

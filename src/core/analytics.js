@@ -17,14 +17,8 @@ const HM_MAX_CELLS = HM_ROWS * HM_MAX_COLS;
 const MINUTE = 60_000;
 const HM_UNITS = [5, 10, 15, 20, 30, 60, 120, 180, 240, 360, 480, 720].map((m) => m * MINUTE);
 
-const RANGE_LABELS = /** @type {const} */ ({
-  cycle: '本计费周期',
-  today: '今天',
-  '24h': '最近 24 小时',
-  '7d': '最近 7 天',
-  '30d': '最近 30 天',
-  all: '全部时间',
-});
+/** Range keys; the UI translates them (key 'range.<key>', or 'range.cycleFallback'). */
+const RANGE_KEYS = /** @type {const} */ (['cycle', 'today', '24h', '7d', '30d', 'all']);
 
 /** @param {number} t */
 function startOfDay(t) {
@@ -60,24 +54,24 @@ function resolveRange(key, { now, quota, earliest }) {
   const to = now + 1;
   switch (key) {
     case 'today':
-      return { key, label: RANGE_LABELS.today, from: startOfDay(now), to };
+      return { key, label: 'range.today', from: startOfDay(now), to };
     case '24h':
-      return { key, label: RANGE_LABELS['24h'], from: now - DAY, to };
+      return { key, label: 'range.24h', from: now - DAY, to };
     case '7d':
-      return { key, label: RANGE_LABELS['7d'], from: now - 7 * DAY, to };
+      return { key, label: 'range.7d', from: now - 7 * DAY, to };
     case '30d':
-      return { key, label: RANGE_LABELS['30d'], from: now - 30 * DAY, to };
+      return { key, label: 'range.30d', from: now - 30 * DAY, to };
     case 'all':
-      return { key, label: RANGE_LABELS.all, from: Math.min(earliest ?? now - 30 * DAY, now - HOUR), to };
+      return { key, label: 'range.all', from: Math.min(earliest ?? now - 30 * DAY, now - HOUR), to };
     default: {
       const reset = quota?.resetAt ? Date.parse(quota.resetAt) : NaN;
       if (Number.isFinite(reset)) {
         const r = new Date(reset);
         const from = Date.UTC(r.getUTCFullYear(), r.getUTCMonth() - 1, r.getUTCDate(), r.getUTCHours(), r.getUTCMinutes());
         // Billing dates are shown as UTC calendar dates, like Kiro does.
-      if (from < now) return { key: 'cycle', label: RANGE_LABELS.cycle, from, to, resetAt: quota?.resetAt ?? null, utc: true };
+        if (from < now) return { key: 'cycle', label: 'range.cycle', from, to, resetAt: quota?.resetAt ?? null, utc: true };
       }
-      return { key: 'cycle', label: '最近 30 天（未读到计费周期）', from: now - 30 * DAY, to, resetAt: null };
+      return { key: 'cycle', label: 'range.cycleFallback', from: now - 30 * DAY, to, resetAt: null };
     }
   }
 }
@@ -302,7 +296,7 @@ function topItems(map, top) {
   const sorted = [...map.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const items = sorted.slice(0, top).map(([label, value]) => ({ label, value }));
   const rest = sorted.slice(top).reduce((s, [, v]) => s + v, 0);
-  if (rest > 0) items.push({ label: '其他', value: rest });
+  if (rest > 0) items.push({ label: '@other', value: rest });
   return items;
 }
 
@@ -314,11 +308,11 @@ function buildDistribution(rows) {
   const credits = new Map();
   for (const r of rows) {
     if (r.kind === 'main') {
-      const m = r.modelId || '未知模型';
+      const m = r.modelId || '@unknown';
       tokens.set(m, (tokens.get(m) || 0) + r.inputTokens + r.outputTokens);
       credits.set(m, (credits.get(m) || 0) + r.credits);
     } else {
-      const label = r.kind === 'aux' ? '辅助（权限分类、标题等）' : '子智能体';
+      const label = r.kind === 'aux' ? '@aux' : '@delegated';
       credits.set(label, (credits.get(label) || 0) + r.credits);
     }
   }
@@ -565,7 +559,7 @@ function buildDaily(rows, range, opts = {}) {
 }
 
 module.exports = {
-  RANGE_LABELS,
+  RANGE_KEYS,
   resolveRange,
   reconcile,
   enrichRows,

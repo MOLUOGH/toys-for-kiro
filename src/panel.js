@@ -6,7 +6,7 @@ const crypto = require('crypto');
 
 /**
  * @typedef {{ view?: string, sessionId?: string | null }} OpenOptions
- * @typedef {{ buildPayload: (msg: any) => any, refresh: () => Promise<void>, defaultRange: () => string }} PanelHost
+ * @typedef {{ buildPayload: (msg: any) => any, refresh: () => Promise<void>, defaultRange: () => string, lang: () => 'zh' | 'en' }} PanelHost
  */
 
 class DashboardPanel {
@@ -59,6 +59,11 @@ class DashboardPanel {
     void this.panel.webview.postMessage(msg);
   }
 
+  /** @param {'zh' | 'en'} lang */
+  setLang(lang) {
+    this.post({ type: 'lang', lang });
+  }
+
   /** Data changed on disk: ask the webview to reload its current view. */
   notifyChanged() {
     if (!this.panel.visible) {
@@ -74,7 +79,7 @@ class DashboardPanel {
     if (!m || typeof m.type !== 'string') return;
     switch (m.type) {
       case 'ready':
-        this.post({ type: 'init', defaultRange: this.host.defaultRange(), view: this.initial.view ?? null, sessionId: this.initial.sessionId ?? null });
+        this.post({ type: 'init', lang: this.host.lang(), defaultRange: this.host.defaultRange(), view: this.initial.view ?? null, sessionId: this.initial.sessionId ?? null });
         break;
       case 'load':
         try {
@@ -111,7 +116,7 @@ class DashboardPanel {
       `font-src ${webview.cspSource}`,
     ].join('; ');
     return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="${this.host.lang() === 'en' ? 'en' : 'zh-CN'}">
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="${csp}">
@@ -121,6 +126,7 @@ class DashboardPanel {
 </head>
 <body>
 <div id="root"></div>
+<script nonce="${nonce}" src="${media('i18n.js')}"></script>
 <script nonce="${nonce}" src="${media('dashboard.js')}"></script>
 </body>
 </html>`;

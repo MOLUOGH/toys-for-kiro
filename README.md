@@ -5,6 +5,8 @@
 [![License: MIT](https://img.shields.io/github/license/MOLUOGH/toys-for-kiro)](LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078d4)
 
+**简体中文** | [English](https://github.com/MOLUOGH/toys-for-kiro/blob/main/README.en.md)
+
 Kiro IDE 的非官方用量面板：看清每个会话花了多少 credits、上下文占了多少、每次请求有多快。只读取本机的 Kiro 会话记录和日志，不修改 Kiro，不联网，不上传任何数据。
 
 > 非官方项目，与 AWS 无关联，也未获得其认可。Kiro 是 Amazon.com, Inc. 或其关联公司的商标。
@@ -16,8 +18,6 @@ Kiro IDE 的非官方用量面板：看清每个会话花了多少 credits、上
 
 <sub>截图使用编造的演示数据（`scripts/screenshots.ps1` 生成）。</sub>
 
-**English:** An unofficial usage dashboard for Kiro IDE. It shows credits, estimated tokens, context usage, per-request latency and your billing-cycle quota, read only from Kiro's local files. Nothing is modified or uploaded. Windows only for now; the UI is in Chinese.
-
 ## 功能
 
 - **状态栏**：当前会话的上下文占用和已用 credits。悬停可以看到轮次、请求、工具调用、credits（含子智能体和辅助）、估算 token、首包延迟、模型和工具耗时、可见输出速度，以及本计费周期的额度。
@@ -26,6 +26,7 @@ Kiro IDE 的非官方用量面板：看清每个会话花了多少 credits、上
 - **会话**：会话列表和单个会话的完整统计。
 - **额度**：套餐、本周期已用和上限、奖励额度、重置时间、本机每日 credits。
 - **隐私开关**：可以只在内存里统计，不写磁盘。
+- **中英文界面**：默认跟随 Kiro 的显示语言，也可以在设置里指定。
 - 支持导入 Kiro 1.0 之前的旧格式会话。
 
 <table>
@@ -101,6 +102,7 @@ Credits、上下文占用和 token 都从 Kiro 自己的会话文件计算，Kir
 
 | 设置 | 默认值 | 说明 |
 |---|---|---|
+| `toysForKiro.language` | auto | 界面语言：`auto` 跟随 Kiro，`zh-CN` 中文，`en` 英文 |
 | `toysForKiro.contextWindowTokens` | 1000000 | 上下文窗口大小，用于把占用百分比换算成 token |
 | `toysForKiro.modelContextWindows` | `{}` | 按模型覆盖窗口大小 |
 | `toysForKiro.creditPriceUsd` | 0 | 每 credit 的美元价格，0 表示用超额单价 |
@@ -110,6 +112,8 @@ Credits、上下文占用和 token 都从 Kiro 自己的会话文件计算，Kir
 | `toysForKiro.statusBar.enabled` | true | 显示状态栏项 |
 | `toysForKiro.refreshIntervalSeconds` | 5 | 扫描间隔（秒） |
 | `toysForKiro.defaultRange` | cycle | 面板默认时间范围 |
+
+命令和设置项的名称跟随 Kiro 的显示语言；`toysForKiro.language` 控制面板、状态栏和弹窗。
 
 ## 限制
 
