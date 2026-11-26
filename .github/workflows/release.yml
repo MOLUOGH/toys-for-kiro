@@ -1,0 +1,53 @@
+# Push a tag like v0.2.2 to test, package and publish a GitHub Release.
+# The tag must match the version in package.json; release notes come from CHANGELOG.md.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Check version
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ("v$version" -ne $env:GITHUB_REF_NAME) {
+            throw "Tag $env:GITHUB_REF_NAME does not match package.json version $version"
+          }
+          "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Test
+        shell: pwsh
+        run: node --test "test/*.test.js"
+
+      - name: Package
+        shell: pwsh
+        run: ./scripts/package.ps1
+
+      - name: Release notes
+        shell: pwsh
+        run: |
+          $lines = Get-Content CHANGELOG.md -Encoding utf8
+          $start = [Array]::IndexOf($lines, "## $env:VERSION")
+          if ($start -lt 0) { throw "CHANGELOG.md has no '## $env:VERSION' section" }
+          $end = $start + 1
+          while ($end -lt $lines.Count -and -not $lines[$end].StartsWith('## ')) { $end++ }
+          $lines[($start + 1)..($end - 1)] -join "`n" | Out-File notes.md -Encoding utf8
+
+      - name: Create release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $env:GITHUB_REF_NAME "dist/toys-for-kiro-$env:VERSION.vsix" --title $env:GITHUB_REF_NAME --notes-file notes.md --verify-tag
