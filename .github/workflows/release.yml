@@ -1,4 +1,5 @@
-# Push a tag like v0.2.2 to test, package and publish a GitHub Release.
+# Push a tag like v0.2.2 to test, package and publish a GitHub Release, then
+# publish the same VSIX to Open VSX (needs the OVSX_PAT repository secret).
 # The tag must match the version in package.json; release notes come from CHANGELOG.md.
 name: Release
 
@@ -12,6 +13,9 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
+    env:
+      # Repository secret; the Open VSX steps are skipped when it is not set.
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
     steps:
       - uses: actions/checkout@v4
 
@@ -51,3 +55,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create $env:GITHUB_REF_NAME "dist/toys-for-kiro-$env:VERSION.vsix" --title $env:GITHUB_REF_NAME --notes-file notes.md --verify-tag
+
+      - name: Create Open VSX namespace
+        if: env.OVSX_PAT != ''
+        shell: pwsh
+        run: |
+          $out = npx --yes ovsx create-namespace moluogh -p $env:OVSX_PAT 2>&1 | Out-String
+          $out
+          if ($LASTEXITCODE -ne 0 -and $out -notmatch 'already exists') { throw 'create-namespace failed' }
+          $global:LASTEXITCODE = 0
+
+      - name: Publish to Open VSX
+        if: env.OVSX_PAT != ''
+        shell: pwsh
+        run: npx --yes ovsx publish "dist/toys-for-kiro-$env:VERSION.vsix" -p $env:OVSX_PAT

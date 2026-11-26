@@ -1,6 +1,7 @@
 # Toys for Kiro
 
 [![Release](https://img.shields.io/github/v/release/MOLUOGH/toys-for-kiro?label=release)](https://github.com/MOLUOGH/toys-for-kiro/releases/latest)
+[![Open VSX](https://img.shields.io/open-vsx/v/moluogh/toys-for-kiro?label=Open%20VSX)](https://open-vsx.org/extension/moluogh/toys-for-kiro)
 [![License: MIT](https://img.shields.io/github/license/MOLUOGH/toys-for-kiro)](LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078d4)
 
@@ -42,13 +43,17 @@ Kiro IDE 的非官方用量面板：看清每个会话花了多少 credits、上
 
 需要 Kiro IDE（Windows）。
 
+**从扩展面板安装（推荐）**：在 Kiro 的扩展视图里搜索 `Toys for Kiro`，点击安装。
+
+**手动安装**：
 1. 从 [Releases](https://github.com/MOLUOGH/toys-for-kiro/releases/latest) 下载 `toys-for-kiro-<版本>.vsix`。
 2. 在 Kiro 里打开命令面板（`Ctrl+Shift+P`），执行 `Extensions: Install from VSIX...`，选择下载的文件。
    也可以在终端里执行：
    ```powershell
    & "<Kiro 安装目录>\bin\kiro.cmd" --install-extension toys-for-kiro-<版本>.vsix
    ```
-3. 执行 `Developer: Reload Window`。状态栏右侧出现饼图图标即安装成功，点击它打开用量面板。
+
+安装后执行 `Developer: Reload Window`。状态栏右侧出现饼图图标即安装成功，点击它打开用量面板。
 
 卸载：在扩展视图里卸载 Toys for Kiro。本扩展的索引保存在 `%APPDATA%\Kiro\User\globalStorage\moluogh.toys-for-kiro`，卸载后可以手动删除。
 
@@ -124,7 +129,7 @@ Credits、上下文占用和 token 都从 Kiro 自己的会话文件计算，Kir
 .\scripts\node.ps1 scripts\inspect.js             # 用本机真实数据建临时索引并打印摘要
 ```
 
-发版：更新 `package.json` 的版本号和 `CHANGELOG.md`，提交后推送 `v<版本>` 标签。GitHub Actions 会跑测试、打包并创建 Release。
+发版：更新 `package.json` 的版本号和 `CHANGELOG.md`，提交后推送 `v<版本>` 标签。GitHub Actions 会跑测试、打包、创建 Release，并发布到 Open VSX（需要仓库 Secret `OVSX_PAT`）。
 
 ## 许可证
 
