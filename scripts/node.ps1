@@ -1,7 +1,6 @@
 # Runs Node.js scripts. Uses `node` from PATH when available, otherwise Kiro's
 # bundled Electron in Node mode (same runtime as the extension host).
 #   .\scripts\node.ps1 --test test\
-#   .\scripts\node.ps1 scripts\inspect.js
 $ErrorActionPreference = 'Stop'
 
 $node = Get-Command node -ErrorAction SilentlyContinue

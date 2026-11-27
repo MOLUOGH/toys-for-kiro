@@ -16,7 +16,7 @@ Kiro IDE 的非官方用量面板：看清每个会话花了多少 credits、上
   <img src="https://raw.githubusercontent.com/MOLUOGH/toys-for-kiro/main/docs/images/overview.png" alt="用量概览" width="860">
 </p>
 
-<sub>截图使用编造的演示数据（`scripts/screenshots.ps1` 生成）。</sub>
+<sub>截图使用编造的演示数据。</sub>
 
 ## 功能
 
@@ -122,18 +122,14 @@ Credits、上下文占用和 token 都从 Kiro 自己的会话文件计算，Kir
 - 旧版会话没有 credits；每次执行只按最终上下文估算一次输入 token，数值偏低。
 - 正在进行的那一轮，请求 ID 要等这一轮结束才写入。在此之前，延迟数据按时间顺序和日志配对。
 
-## 开发
+## 从源码构建
 
-本机没有 Node 时，脚本会用 Kiro 自带的 Electron 以 Node 模式运行：
+本机没有 Node 时，脚本会使用 Kiro 自带的 Electron 以 Node 模式运行：
 
 ```powershell
-.\scripts\node.ps1 --test test/*.test.js        # 测试
-.\scripts\package.ps1                             # 打包 VSIX 到 dist\
-.\scripts\screenshots.ps1                         # 用演示数据重新生成 README 截图
-.\scripts\node.ps1 scripts\inspect.js             # 用本机真实数据建临时索引并打印摘要
+.\scripts\node.ps1 --test test/*.test.js   # 运行测试
+.\scripts\package.ps1                      # 打包 VSIX 到 dist\
 ```
-
-发版：更新 `package.json` 的版本号和 `CHANGELOG.md`，提交后推送 `v<版本>` 标签。GitHub Actions 会跑测试、打包、创建 Release，并发布到 Open VSX（需要仓库 Secret `OVSX_PAT`）。
 
 ## 许可证
 

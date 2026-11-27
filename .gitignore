@@ -2,3 +2,10 @@ dist/
 node_modules/
 *.vsix
 *.tmp.js
+
+# Local-only notes and maintainer scripts
+docs/NOTES.md
+scripts/inspect.js
+scripts/screenshots.ps1
+scripts/preview.js
+scripts/demo-data.js
