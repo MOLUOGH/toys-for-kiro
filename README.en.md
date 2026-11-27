@@ -20,11 +20,11 @@ An unofficial usage dashboard for Kiro IDE. See how many credits each session us
 
 ## Features
 
-- **Status bar**: context usage and credits of the current session. Hover for turns, requests, tool calls, credits (including subagents and auxiliary calls), estimated tokens, time to first token, model and tool time, visible output speed, and this billing cycle's quota.
+- **Status bar**: context usage and credits of the current session (highlights yellow at ≥ 75% and red at ≥ 90% context usage). Hover for turns, requests, tool calls, credits (including subagents and auxiliary calls), estimated tokens, time to first token, model and tool time, visible output speed, and this billing cycle's quota.
 - **Overview**: requests, estimated tokens, credits and their USD equivalent; a usage heatmap (cells from 5 minutes to 1 day, chosen to fit the time range); a model health timeline; usage by model.
 - **Requests**: every request, filterable by model, session and status, with context usage, time to first token, duration, error type, retries and fallbacks.
-- **Sessions**: a session list and full statistics for any session.
-- **Quota**: plan, used and limit for this cycle, bonus credits, reset time, and daily credits on this machine.
+- **Sessions**: a session list with search (title, workspace, model), current-workspace filter, and full statistics for any session.
+- **Quota**: plan, used and limit for this cycle, daily pace and end-of-cycle projection, bonus credits, reset time, and daily credits on this machine.
 - **Privacy switch**: keep statistics in memory only, with nothing written to disk.
 - **Chinese and English UI**: follows Kiro's display language by default; can be set explicitly.
 - Imports sessions in the pre-1.0 Kiro format.
@@ -121,15 +121,6 @@ Command and setting names follow Kiro's display language. `toysForKiro.language`
 - The "current session" is the most recently active session in the current workspace. With several sessions open, it may not be the one you are looking at.
 - Legacy sessions have no credits, and their input tokens are estimated once per run from the final context, so they read low.
 - For the turn in progress, request IDs are only written when the turn ends. Until then, latency data is matched to the log by time order.
-
-## Build from source
-
-If Node.js is not installed, the scripts run Kiro's bundled Electron in Node mode:
-
-```powershell
-.\scripts\node.ps1 --test test/*.test.js   # run tests
-.\scripts\package.ps1                      # build the VSIX into dist\
-```
 
 ## License
 

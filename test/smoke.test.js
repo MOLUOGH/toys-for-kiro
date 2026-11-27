@@ -183,6 +183,7 @@ test('extension activates, indexes data and renders every view', async (t) => {
   const item = stub.statusItems[0];
   assert.equal(item.visible, true);
   assert.equal(item.text, EXPECTED_STATUS);
+  assert.equal(item.backgroundColor, undefined);
   const tip = item.tooltip.value;
   assert.match(tip, /演示 \\<会话\\> \\\| test/); // escaped title
   assert.match(tip, /1 \/ 3 \/ 1/); // turns / requests (2 + log-only error) / tools
@@ -231,6 +232,27 @@ test('extension activates, indexes data and renders every view', async (t) => {
   await pump();
   assert.match(dom.root.innerHTML, /首包延迟/);
   assert.match(dom.root.innerHTML, /可见输出速度/);
+
+  // Sessions filter: workspace toggle & search input.
+  dom.handlers['doc:change']({ target: { dataset: { change: 'session-ws' }, checked: true } });
+  assert.match(dom.root.innerHTML, /演示 &lt;会话&gt; \| test/);
+  assert.doesNotMatch(dom.root.innerHTML, /Old chat/);
+  dom.handlers['doc:input']({ target: { dataset: { input: 'session-query' }, value: 'no-such-session' } });
+  assert.match(dom.root.innerHTML, /没有符合筛选条件的会话/);
+
+  // Quota forecast renders daily pace.
+  click({ action: 'view', view: 'quota' });
+  await pump();
+  assert.match(dom.root.innerHTML, /日均消耗/);
+
+  // Status bar background color highlights high context usage.
+  const baseStats = api.app.buildPayload({ view: 'sessions', range: 'all', sessionId: 'sess_demo' }).selected;
+  api.app.statusBar.update({ stats: { ...baseStats, context: { ...baseStats.context, pct: 78 } }, quota: null, price: 0.04 }, 'zh');
+  assert.equal(item.backgroundColor.id, 'statusBarItem.warningBackground');
+  api.app.statusBar.update({ stats: { ...baseStats, context: { ...baseStats.context, pct: 92 } }, quota: null, price: 0.04 }, 'zh');
+  assert.equal(item.backgroundColor.id, 'statusBarItem.errorBackground');
+  api.app.statusBar.update(null, 'zh');
+  assert.equal(item.backgroundColor, undefined);
 });
 
 test('memory mode writes nothing; switching, clearing and retention work', async (t) => {

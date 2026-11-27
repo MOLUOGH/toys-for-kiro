@@ -153,7 +153,8 @@ class App {
 
   /** @param {any} msg */
   buildPayload(msg) {
-    return buildPayload(msg, { store: this.store, settings: this.settings });
+    const workspaceFolders = (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath);
+    return buildPayload(msg, { store: this.store, settings: this.settings, workspaceFolders });
   }
 
   fullScan() {

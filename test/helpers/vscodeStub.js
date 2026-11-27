@@ -44,6 +44,12 @@ function createStub() {
     }
   }
 
+  class ThemeColor {
+    constructor(id) {
+      this.id = id;
+    }
+  }
+
   const disposable = () => ({ dispose() {} });
 
   function createWebviewPanel(viewType, title) {
@@ -82,13 +88,14 @@ function createStub() {
   const vscode = {
     Uri,
     MarkdownString,
+    ThemeColor,
     StatusBarAlignment: { Left: 1, Right: 2 },
     ViewColumn: { Active: -1 },
     ProgressLocation: { Window: 10, Notification: 15 },
     window: {
       createOutputChannel: () => ({ info() {}, warn() {}, error() {}, appendLine() {}, dispose() {} }),
       createStatusBarItem: () => {
-        const item = { text: '', tooltip: '', command: null, name: '', visible: false, show() { this.visible = true; }, hide() { this.visible = false; }, dispose() {} };
+        const item = { text: '', tooltip: '', command: null, name: '', backgroundColor: undefined, visible: false, show() { this.visible = true; }, hide() { this.visible = false; }, dispose() {} };
         statusItems.push(item);
         return item;
       },

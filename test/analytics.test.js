@@ -173,3 +173,23 @@ test('billing dates and daily credits follow UTC calendar days', () => {
   assert.deepEqual(days.map((d) => d.credits), [3, 0.5, 0]);
   assert.deepEqual(days.map((d) => d.requests), [2, 0, 0]);
 });
+
+test('buildQuotaForecast estimates daily pace and end-of-cycle usage', () => {
+  const now = Date.parse('2026-11-11T00:00:00Z'); // 10 days into a 30-day cycle
+  const cycle = a.resolveRange('cycle', { now, quota: { resetAt: '2026-12-01T00:00:00.000Z' } });
+  const under = a.buildQuotaForecast({ used: 200, limit: 1000, resetAt: '2026-12-01T00:00:00.000Z' }, cycle, now);
+  assert.equal(under.dailyAvg, 20);
+  assert.equal(under.projected, 600);
+  assert.equal(under.runsOutBeforeReset, false);
+
+  const over = a.buildQuotaForecast({ used: 500, limit: 1000, resetAt: '2026-12-01T00:00:00.000Z' }, cycle, now);
+  assert.equal(over.dailyAvg, 50);
+  assert.equal(over.projected, 1500);
+  assert.equal(over.daysUntilLimit, 10);
+  assert.equal(over.runsOutBeforeReset, true);
+
+  const maxed = a.buildQuotaForecast({ used: 1000, limit: 1000, resetAt: '2026-12-01T00:00:00.000Z' }, cycle, now);
+  assert.equal(maxed.remainingCredits, 0);
+  assert.equal(maxed.runsOutBeforeReset, false);
+  assert.equal(a.buildQuotaForecast(null, cycle, now), null);
+});

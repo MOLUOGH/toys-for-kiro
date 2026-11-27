@@ -36,11 +36,14 @@ function loadRows(store, settings, q) {
   return a.enrichRows(rows, settings);
 }
 
+/** @param {string} p */
+const normPath = (p) => p.replace(/[\\/]+$/, '').toLowerCase();
+
 /**
  * @param {{ view: string, range?: string | null, filters?: any, sessionId?: string | null }} msg
- * @param {{ store: import('./store').Store, settings: Settings, now?: number }} deps
+ * @param {{ store: import('./store').Store, settings: Settings, now?: number, workspaceFolders?: string[] }} deps
  */
-function buildPayload(msg, { store, settings, now = Date.now() }) {
+function buildPayload(msg, { store, settings, now = Date.now(), workspaceFolders = [] }) {
   const quota = store.getKv('quota');
   const price = creditPrice(settings, quota);
   const range = a.resolveRange(msg.range || settings.defaultRange, { now, quota, earliest: store.earliestTs() });
@@ -61,13 +64,17 @@ function buildPayload(msg, { store, settings, now = Date.now() }) {
             { price, settings },
           )
         : null;
-      return { range, meta, rows: a.buildSessionList(sessions, all, range), selected };
+      const folders = new Set(workspaceFolders.map(normPath));
+      const wsById = new Map(sessions.map((s) => [s.id, (s.workspaces || []).some((/** @type {string} */ w) => folders.has(normPath(w)))]));
+      const rows = a.buildSessionList(sessions, all, range).map((r) => ({ ...r, inWorkspace: !!wsById.get(r.id) }));
+      return { range, meta, hasWorkspace: folders.size > 0, rows, selected };
     }
     case 'quota': {
       const cycle = a.resolveRange('cycle', { now, quota });
       const rows = loadRows(store, settings, cycle);
       const local = rows.reduce((s, r) => s + r.credits, 0);
-      return { range: cycle, meta, quota, cycle: { ...cycle, localCredits: local, daily: a.buildDaily(rows, cycle, { utc: !!cycle.utc }) } };
+      const forecast = a.buildQuotaForecast(quota, cycle, now);
+      return { range: cycle, meta, quota, cycle: { ...cycle, localCredits: local, daily: a.buildDaily(rows, cycle, { utc: !!cycle.utc }), forecast } };
     }
     case 'overview':
     default:
@@ -82,10 +89,9 @@ function buildPayload(msg, { store, settings, now = Date.now() }) {
  * @param {string[]} workspaceFolders
  */
 function findActiveSession(store, workspaceFolders) {
-  const norm = (/** @type {string} */ p) => p.replace(/[\\/]+$/, '').toLowerCase();
-  const folders = new Set(workspaceFolders.map(norm));
+  const folders = new Set(workspaceFolders.map(normPath));
   const sessions = store.listSessions().filter((s) => s.source === 'v1');
-  const inWorkspace = sessions.filter((s) => (s.workspaces || []).some((/** @type {string} */ w) => folders.has(norm(w))));
+  const inWorkspace = sessions.filter((s) => (s.workspaces || []).some((/** @type {string} */ w) => folders.has(normPath(w))));
   const pool = inWorkspace.length ? inWorkspace : sessions;
   return pool.reduce((best, s) => (!best || (s.updatedAt ?? 0) > (best.updatedAt ?? 0) ? s : best), null);
 }

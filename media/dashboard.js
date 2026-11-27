@@ -15,6 +15,8 @@
     metric: saved.metric || 'tokens',
     filters: saved.filters || {},
     sessionId: saved.sessionId || null,
+    sessionQuery: typeof saved.sessionQuery === 'string' ? saved.sessionQuery : '',
+    sessionWorkspaceOnly: !!saved.sessionWorkspaceOnly,
     // The panel HTML carries the language; the extension also sends it with 'init'.
     lang: saved.lang || (document.documentElement && document.documentElement.lang === 'en' ? 'en' : 'zh'),
     /** @type {any} */ data: null,
@@ -111,7 +113,16 @@
 
   // ---------- state & messaging ----------
   function persist() {
-    vscode.setState({ view: state.view, range: state.range, metric: state.metric, filters: state.filters, sessionId: state.sessionId, lang: state.lang });
+    vscode.setState({
+      view: state.view,
+      range: state.range,
+      metric: state.metric,
+      filters: state.filters,
+      sessionId: state.sessionId,
+      sessionQuery: state.sessionQuery,
+      sessionWorkspaceOnly: state.sessionWorkspaceOnly,
+      lang: state.lang,
+    });
   }
 
   /** @param {string | undefined} lang */
@@ -207,16 +218,34 @@
   });
 
   document.addEventListener('change', (e) => {
-    const el = /** @type {HTMLSelectElement} */ (e.target);
+    const el = /** @type {HTMLSelectElement & HTMLInputElement} */ (e.target);
     const key = el && el.dataset ? el.dataset.change : null;
     if (!key) return;
+    if (key === 'session-ws') {
+      state.sessionWorkspaceOnly = !!el.checked;
+      persist();
+      render();
+      return;
+    }
     if (key === 'range') state.range = el.value;
     else state.filters = Object.assign({}, state.filters, { [key]: el.value || undefined });
     load();
   });
 
+  document.addEventListener('input', (e) => {
+    const el = /** @type {HTMLInputElement} */ (e.target);
+    if (!el || !el.dataset || el.dataset.input !== 'session-query') return;
+    state.sessionQuery = el.value || '';
+    persist();
+    render();
+  });
+
   // ---------- rendering ----------
   function render() {
+    const active = /** @type {any} */ (document).activeElement;
+    const keepFocus = active && active.dataset && active.dataset.input === 'session-query';
+    const selStart = keepFocus ? active.selectionStart : null;
+    const selEnd = keepFocus ? active.selectionEnd : null;
     const d = state.data;
     let body;
     if (state.error) body = `<div class="empty error">${esc(state.error)}</div>`;
@@ -226,6 +255,13 @@
     else if (state.view === 'quota') body = renderQuota(d);
     else body = renderOverview(d);
     root.innerHTML = header() + `<main>${body}</main>`;
+    if (keepFocus && typeof document.querySelector === 'function') {
+      const input = /** @type {HTMLInputElement | null} */ (document.querySelector('[data-input="session-query"]'));
+      if (input) {
+        input.focus();
+        if (selStart != null && selEnd != null) input.setSelectionRange(selStart, selEnd);
+      }
+    }
   }
 
   function header() {
@@ -493,7 +529,22 @@ ${card(t('overview.credits'), cr(tt.credits), creditSub, t('overview.priceNote',
   function renderSessions(d) {
     const top = d.selected ? sessionCard(d.selected) : '';
     if (!d.rows.length) return caption(d.range) + top + empty(t('session.empty'));
-    const rows = d.rows
+    const q = state.sessionQuery.trim().toLowerCase();
+    const wsOnly = !!(state.sessionWorkspaceOnly && d.hasWorkspace);
+    const filtered = d.rows.filter((/** @type {any} */ s) => {
+      if (wsOnly && !s.inWorkspace) return false;
+      if (!q) return true;
+      const hay = `${titleOf(s.id, s.title)} ${s.workspace || ''} ${s.modelId || ''}`.toLowerCase();
+      return hay.includes(q);
+    });
+    const wsToggle = d.hasWorkspace
+      ? `<label class="check"><input type="checkbox" data-change="session-ws"${state.sessionWorkspaceOnly ? ' checked' : ''}>${esc(t('session.currentWorkspace'))}</label>`
+      : '';
+    const countText =
+      q || wsOnly ? t('session.countFiltered', { n: int(filtered.length), total: int(d.rows.length) }) : t('session.count', { n: int(d.rows.length) });
+    const filters = `<div class="filters"><input type="search" class="search" data-input="session-query" value="${esc(state.sessionQuery)}" placeholder="${esc(t('session.search'))}">${wsToggle}<span class="muted">${esc(countText)}</span></div>`;
+    if (!filtered.length) return caption(d.range) + top + filters + empty(t('session.noMatch'));
+    const rows = filtered
       .map((/** @type {any} */ s) => {
         const title = titleOf(s.id, s.title);
         return `<tr class="clickable${d.selected && d.selected.id === s.id ? ' selected' : ''}" data-action="session" data-id="${esc(s.id)}">
@@ -510,7 +561,7 @@ ${card(t('overview.credits'), cr(tt.credits), creditSub, t('overview.priceNote',
       })
       .join('');
     const head = thead(['session', 'workspace', 'model', '#turns', '#requests', '#credits', '#tokens', '#context', 'lastActive']);
-    return `${caption(d.range)}${top}<div class="table-wrap"><table>${head}<tbody>${rows}</tbody></table></div>`;
+    return `${caption(d.range)}${top}${filters}<div class="table-wrap"><table>${head}<tbody>${rows}</tbody></table></div>`;
   }
 
   /** @param {string} name @param {number | null} used @param {number | null} limit @param {string} [extra] HTML */
@@ -556,6 +607,17 @@ ${card(t('overview.credits'), cr(tt.credits), creditSub, t('overview.priceNote',
     const reset = Number.isFinite(resetAt)
       ? `<span title="${esc(t('utcNote'))}">${esc(t('quota.reset', { d: utcMd(resetAt), local: mdhm(resetAt), n: daysLeft }))}</span>`
       : '';
+    const fc = d.cycle.forecast;
+    let paceCard = '';
+    if (fc) {
+      const paceSub =
+        fc.remainingCredits <= 0
+          ? t('quota.limitReached')
+          : fc.runsOutBeforeReset
+            ? t('quota.runsOut', { d: Math.max(1, Math.round(fc.daysUntilLimit)), p: cr(fc.projected) })
+            : t('quota.projected', { p: cr(fc.projected) });
+      paceCard = stat(t('quota.pace'), esc(t('quota.perDay', { c: cr(fc.dailyAvg) })), esc(paceSub));
+    }
     return `<section class="panel">
 <div class="panel-head"><h2>${esc(q.plan || t('quota.plan'))}</h2><div class="grow"></div><span class="muted">${esc(t('quota.updated', { t: mdhm(q.updatedAt) }))}</span></div>
 ${meter(t('quota.cycle'), q.used, q.limit, reset)}
@@ -564,6 +626,7 @@ ${bonus}
 ${stat(t('quota.overage'), esc(overage), ok(q.overageRate) ? esc(t('quota.overageRate', { r: q.overageRate })) : '')}
 ${stat(t('quota.local'), cr(d.cycle.localCredits), esc(t('quota.localNote')))}
 ${stat(t('quota.usd'), usd((q.used ?? 0) * d.meta.price), esc(t('quota.atPrice', { p: d.meta.price })))}
+${paceCard}
 </div>
 </section>
 <section class="panel"><div class="panel-head"><h2>${esc(t('quota.daily'))}</h2></div>${bars(d.cycle.daily, !!d.cycle.utc)}</section>`;

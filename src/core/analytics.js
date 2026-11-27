@@ -558,6 +558,28 @@ function buildDaily(rows, range, opts = {}) {
   return days;
 }
 
+/**
+ * Daily burn rate and end-of-cycle projection from the current billing cycle.
+ * Elapsed time is floored at 1 day so the first hours of a new cycle do not
+ * extrapolate a noisy spike.
+ * @param {{ used?: number | null, limit?: number | null, resetAt?: string | null } | null | undefined} quota
+ * @param {Range} cycle
+ * @param {number} now
+ */
+function buildQuotaForecast(quota, cycle, now) {
+  if (!quota || typeof quota.used !== 'number' || typeof quota.limit !== 'number' || quota.limit <= 0) return null;
+  const resetAt = quota.resetAt ? Date.parse(quota.resetAt) : NaN;
+  if (!Number.isFinite(resetAt) || resetAt <= cycle.from) return null;
+  const elapsedDays = Math.max(1, (now - cycle.from) / DAY);
+  const remainingDays = Math.max(0, (resetAt - now) / DAY);
+  const dailyAvg = quota.used / elapsedDays;
+  const projected = quota.used + dailyAvg * remainingDays;
+  const remainingCredits = Math.max(0, quota.limit - quota.used);
+  const daysUntilLimit = remainingCredits <= 0 ? 0 : dailyAvg > 0 ? remainingCredits / dailyAvg : null;
+  const runsOutBeforeReset = daysUntilLimit != null && daysUntilLimit > 0 && daysUntilLimit < remainingDays;
+  return { dailyAvg, projected, remainingDays, remainingCredits, daysUntilLimit, runsOutBeforeReset };
+}
+
 module.exports = {
   RANGE_KEYS,
   resolveRange,
@@ -570,6 +592,7 @@ module.exports = {
   buildSessionStats,
   buildSessionList,
   buildDaily,
+  buildQuotaForecast,
   startOfDay,
   startOfWeek,
 };

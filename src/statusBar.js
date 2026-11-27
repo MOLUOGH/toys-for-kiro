@@ -27,12 +27,19 @@ class SessionStatusBar {
       item.text = '$(pie-chart) Toys for Kiro';
       item.tooltip = t('status.none');
       item.command = 'toysForKiro.openDashboard';
+      item.backgroundColor = undefined;
       item.show();
       return;
     }
     const { stats: s, quota, price } = data;
     const c = s.credits;
     item.text = `$(pie-chart) ${f.pct(s.context.pct)} · ${f.credits(c?.total)} cr`;
+    item.backgroundColor =
+      typeof s.context.pct === 'number' && s.context.pct >= 90
+        ? new vscode.ThemeColor('statusBarItem.errorBackground')
+        : typeof s.context.pct === 'number' && s.context.pct >= 75
+          ? new vscode.ThemeColor('statusBarItem.warningBackground')
+          : undefined;
     item.command = { command: 'toysForKiro.openDashboard', title: t('status.open'), arguments: [{ view: 'sessions', sessionId: s.id }] };
 
     const tip = new vscode.MarkdownString();
