@@ -146,6 +146,16 @@ async function bootDashboard(panel) {
 
 /** Fixture + stubbed vscode + activated extension, torn down after the test. */
 async function activateWith(t, config = {}) {
+  const realNow = Date.now;
+  const rawNow = realNow();
+  const sameLocalDay = (t1, t2) => {
+    const d1 = new Date(t1);
+    const d2 = new Date(t2);
+    return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+  };
+  // Keep `now - 60_000` and `now + 15_000` on the same local calendar day across midnight.
+  const clockOffset = sameLocalDay(rawNow - 60_000, rawNow + 15_000) ? 0 : 120_000;
+  if (clockOffset) Date.now = () => realNow() + clockOffset;
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'toys-for-kiro-smoke-'));
   const fx = writeFixture(tmp);
   const realHome = os.homedir;
@@ -158,6 +168,7 @@ async function activateWith(t, config = {}) {
   t.after(() => {
     for (const d of subscriptions) d.dispose();
     uninstall();
+    Date.now = realNow;
     os.homedir = realHome;
     fs.rmSync(tmp, { recursive: true, force: true });
   });
@@ -188,6 +199,8 @@ test('extension activates, indexes data and renders every view', async (t) => {
   assert.match(tip, /演示 \\<会话\\> \\\| test/); // escaped title
   assert.match(tip, /1 \/ 3 \/ 1/); // turns / requests (2 + log-only error) / tools
   assert.match(tip, /11\\\.20 \/ 1000\\\.0 credits/);
+  assert.match(tip, /command:toysForKiro\.openSettings/);
+  assert.ok(item.tooltip.isTrusted.enabledCommands.includes('toysForKiro.openSettings'));
   assert.deepEqual(item.command.arguments[0], { view: 'sessions', sessionId: 'sess_demo' });
 
   // Payloads for every view.
@@ -210,13 +223,25 @@ test('extension activates, indexes data and renders every view', async (t) => {
   // Dashboard panel + real webview script.
   await stub.vscode.commands.executeCommand('toysForKiro.openDashboard', {});
   const panel = stub.panels[0];
+  assert.match(panel.iconPath.fsPath, /media[\\/]icon\.svg$/);
   assert.match(panel.webview.html, /Content-Security-Policy/);
   assert.match(panel.webview.html, /script-src 'nonce-/);
 
   const { dom, pump, click } = await bootDashboard(panel);
+  assert.match(dom.root.innerHTML, /<div class="brand"><svg class="brand-icon"[\s\S]*?<ellipse[\s\S]*?<span>Kiro Usage<\/span><\/div>/);
+  assert.match(dom.root.innerHTML, /data-action="settings"/);
   assert.match(dom.root.innerHTML, /请求数/);
   assert.match(dom.root.innerHTML, /用量热力图/);
   assert.match(dom.root.innerHTML, /claude-opus-5\.5/);
+
+  // Settings entry points: dashboard gear button and command palette command.
+  stub.executed.length = 0;
+  click({ action: 'settings' });
+  await pump();
+  assert.deepEqual(stub.executed.at(-1), { id: 'workbench.action.openSettings', args: ['@ext:moluogh.toys-for-kiro'] });
+  stub.executed.length = 0;
+  await stub.vscode.commands.executeCommand('toysForKiro.openSettings');
+  assert.deepEqual(stub.executed.at(-1), { id: 'workbench.action.openSettings', args: ['@ext:moluogh.toys-for-kiro'] });
 
   for (const [view, marker] of [
     ['requests', /ServerConnectionResetError/],
@@ -253,6 +278,77 @@ test('extension activates, indexes data and renders every view', async (t) => {
   assert.equal(item.backgroundColor.id, 'statusBarItem.errorBackground');
   api.app.statusBar.update(null, 'zh');
   assert.equal(item.backgroundColor, undefined);
+  assert.equal(item.text, '$(pie-chart) Kiro Usage');
+  assert.match(item.tooltip.value, /command:toysForKiro\.openSettings/);
+
+  // Customizable status bar modes ('today' and 'cycle').
+  stub.config['statusBar.mode'] = 'today';
+  await api.app.onSettingsChanged();
+  assert.equal(item.text, '$(pie-chart) 3.1% · 今日 0.71 cr');
+  assert.deepEqual(item.command.arguments[0], { view: 'overview', range: 'today' });
+  assert.match(item.tooltip.value, /今日：0\\\.71 credits/);
+
+  stub.config['statusBar.mode'] = 'cycle';
+  await api.app.onSettingsChanged();
+  assert.equal(item.text, '$(pie-chart) 3.1% · 额度 1.1%');
+  assert.deepEqual(item.command.arguments[0], { view: 'quota' });
+
+  // Export CSV via dashboard button: inactive-tab filters must NOT leak into Overview or Quota exports.
+  click({ action: 'view', view: 'requests' });
+  await pump();
+  dom.handlers['doc:change']({ target: { dataset: { change: 'outcome' }, value: 'error' } });
+  await pump();
+  click({ action: 'view', view: 'overview' });
+  await pump();
+  dom.handlers['doc:change']({ target: { dataset: { change: 'range' }, value: 'all' } });
+  await pump();
+  const csvOut = path.join(path.dirname(dbFile), 'export-requests.csv');
+  stub.answers.push('requests-csv', csvOut);
+  click({ action: 'export' });
+  await pump();
+  const csvText = fs.readFileSync(csvOut, 'utf8');
+  assert.ok(csvText.startsWith('\uFEFFtimeUtc,sessionId,'));
+  assert.match(csvText, /claude-opus-5\.5/);
+  assert.ok(csvText.trim().split('\r\n').length >= 5, 'all Overview rows exported despite inactive Requests filter');
+
+  // Quota tab hides the range selector and must always export 'cycle' even if state.range was 'today'.
+  dom.handlers['doc:change']({ target: { dataset: { change: 'range' }, value: 'today' } });
+  await pump();
+  click({ action: 'view', view: 'quota' });
+  await pump();
+  const quotaJsonOut = path.join(path.dirname(dbFile), 'export-quota-report.json');
+  stub.answers.push('report-json', quotaJsonOut);
+  click({ action: 'export' });
+  await pump();
+  assert.equal(JSON.parse(fs.readFileSync(quotaJsonOut, 'utf8')).range.key, 'cycle');
+
+  const jsonOut = path.join(path.dirname(dbFile), 'export-report.json');
+  stub.answers.push(jsonOut);
+  const savedJson = await stub.vscode.commands.executeCommand('toysForKiro.exportData', { target: 'report-json', range: 'all' });
+  assert.equal(savedJson, jsonOut);
+  const report = JSON.parse(fs.readFileSync(jsonOut, 'utf8'));
+  assert.equal(report.summary.requests, 4);
+  assert.equal(report.sessions.length, 2);
+  assert.ok(Array.isArray(report.daily));
+
+  // Changing defaultRange in Settings updates the open Dashboard live.
+  click({ action: 'view', view: 'overview' });
+  await pump();
+  stub.config.defaultRange = '7d';
+  panel.posted.length = 0;
+  await api.app.onSettingsChanged();
+  for (const m of panel.posted) panel.deliver(m);
+  await pump();
+  assert.match(dom.root.innerHTML, /<option value="7d" selected>/);
+
+  // Default export filename uses kiro-usage-<slug>-<date>.<ext>.
+  const origWorkspaceFolders = stub.vscode.workspace.workspaceFolders;
+  stub.vscode.workspace.workspaceFolders = [{ uri: stub.vscode.Uri.file(path.dirname(dbFile)) }];
+  stub.answers.push(true);
+  const savedDaily = await stub.vscode.commands.executeCommand('toysForKiro.exportData', { target: 'daily-csv' });
+  stub.vscode.workspace.workspaceFolders = origWorkspaceFolders;
+  assert.match(path.basename(savedDaily), /^kiro-usage-daily-\d{4}-\d{2}-\d{2}\.csv$/);
+  assert.ok(fs.existsSync(savedDaily));
 });
 
 test('memory mode writes nothing; switching, clearing and retention work', async (t) => {
@@ -307,7 +403,7 @@ test('memory mode writes nothing; switching, clearing and retention work', async
 test('English UI: status bar, every dashboard view, and switching language live', async (t) => {
   const { api, stub } = await activateWith(t, { language: 'en' });
   const tip = stub.statusItems[0].tooltip.value;
-  assert.match(tip, /Toys for Kiro · current session/);
+  assert.match(tip, /Kiro Usage · current session/);
   assert.match(tip, /Turns \/ requests \/ tool calls/);
   assert.doesNotMatch(tip.replace('演示 \\<会话\\> \\| test', ''), /[\u4e00-\u9fff]/, 'no Chinese except the session title');
 
@@ -354,4 +450,191 @@ test('both languages define the same keys', () => {
   assert.equal(resolveLang('auto', 'ja'), 'en');
   assert.equal(resolveLang('en', 'zh-cn'), 'en');
   assert.equal(resolveLang('zh-CN', 'en'), 'zh');
+});
+
+test('manifest metadata, command registrations, zero-session status bar modes, and export cancel paths', async (t) => {
+  const pkg = require('../package.json');
+  assert.equal(pkg.name, 'toys-for-kiro', 'extension ID must stay stable for Open VSX upgrades');
+  assert.equal(pkg.publisher, 'moluogh');
+  assert.equal(pkg.displayName, 'Kiro Usage');
+  assert.ok(pkg.description.length > 0 && pkg.description.length <= 200);
+  assert.ok(pkg.description.startsWith('Credits, quota & context usage stats.'), 'sidebar ~38-char preview leads with core metrics');
+  assert.ok(Array.isArray(pkg.keywords) && pkg.keywords.length >= 10 && pkg.keywords.length <= 30);
+  for (const kw of ['kiro', 'usage', 'credits', 'quota', 'tokens', 'context', '用量', '额度', '统计']) {
+    assert.ok(pkg.keywords.includes(kw), `missing keyword ${kw}`);
+  }
+  assert.equal(pkg.icon, 'media/icon.png');
+  assert.deepEqual(pkg.galleryBanner, { color: '#24104e', theme: 'dark' });
+  const iconPng = fs.readFileSync(path.join(__dirname, '..', pkg.icon));
+  assert.deepEqual([...iconPng.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 'valid PNG signature');
+  assert.equal(iconPng.readUInt32BE(16), 256, 'icon.png width is 256');
+  assert.equal(iconPng.readUInt32BE(20), 256, 'icon.png height is 256');
+  assert.equal(iconPng[25], 6, 'icon.png is RGBA');
+  const iconSvg = fs.readFileSync(path.join(__dirname, '..', 'media', 'icon.svg'), 'utf8');
+  assert.match(iconSvg, /^<svg\b[^>]*\bwidth="16"[^>]*\bheight="16"[^>]*\bviewBox="0 0 16 16"/, 'icon.svg has explicit 16x16 tab dimensions');
+  assert.equal((iconSvg.match(/<ellipse\b/g) || []).length, 2, 'icon.svg has two Kiro ghost pill eyes');
+  assert.match(iconSvg, /<path\b[\s\S]*<rect\b[\s\S]*<\/svg>\s*$/, 'icon.svg includes quota arc, ghost, and usage bars');
+  const dashboardCss = fs.readFileSync(path.join(__dirname, '..', 'media', 'dashboard.css'), 'utf8');
+  assert.match(dashboardCss, /\.brand-icon\s*\{[^}]*forced-color-adjust:\s*none/, 'brand-icon preserves colors in High Contrast');
+
+  const { api, stub, fx } = await activateWith(t);
+  for (const cmd of pkg.contributes.commands) {
+    assert.ok(stub.commands.has(cmd.command), `command ${cmd.command} must be registered on activate`);
+    assert.equal(cmd.category, 'Kiro Usage');
+  }
+  const editorTitleMenus = pkg.contributes.menus['editor/title'];
+  assert.ok(Array.isArray(editorTitleMenus) && editorTitleMenus.length >= 5);
+  for (const item of editorTitleMenus) {
+    assert.ok(stub.commands.has(item.command), `menu command ${item.command} is registered`);
+    assert.equal(item.when, "activeWebviewPanelId == 'toysForKiro.dashboard'");
+  }
+  // Editor title menus pass a vscode.Uri argument; commands must ignore Uri args cleanly.
+  await stub.vscode.commands.executeCommand('toysForKiro.openDashboard', stub.vscode.Uri.file(fx.userData));
+  stub.answers.push(undefined);
+  assert.equal(await stub.vscode.commands.executeCommand('toysForKiro.exportData', stub.vscode.Uri.file(fx.userData)), undefined);
+
+  // Zero-session edge cases across all three status bar modes and both languages.
+  const item = stub.statusItems[0];
+  const emptyData = {
+    stats: null,
+    today: { credits: 0, requests: 0 },
+    cycleCredits: 0,
+    quota: { used: 5, limit: 100, percent: 5, resetAt: '2026-12-01T00:00:00Z' },
+    price: 0.04,
+    storage: 'memory',
+  };
+  api.app.statusBar.update(emptyData, 'en', 'session');
+  assert.equal(item.text, '$(pie-chart) Kiro Usage');
+  assert.match(item.tooltip.value, /5\\\.00 \/ 100\\\.0 credits/);
+  assert.match(item.tooltip.value, /Memory mode/);
+  assert.match(item.tooltip.value, /command:toysForKiro\.exportData/);
+  assert.match(item.tooltip.value, /command:toysForKiro\.openSettings/);
+  assert.doesNotMatch(item.tooltip.value, /[\u4e00-\u9fff]/);
+
+  api.app.statusBar.update({ ...emptyData, quota: null, storage: 'disk' }, 'en', 'today');
+  assert.equal(item.text, '$(pie-chart) Today 0.00 cr');
+  assert.match(item.tooltip.value, /\*\*Kiro Usage\*\*/);
+  assert.match(item.tooltip.value, /command:toysForKiro\.openSettings/);
+  assert.doesNotMatch(item.tooltip.value, /[\u4e00-\u9fff]/);
+
+  api.app.statusBar.update({ ...emptyData, quota: null, storage: 'disk' }, 'zh', 'cycle');
+  assert.equal(item.text, '$(pie-chart) 本周期 0.00 cr');
+  assert.match(item.tooltip.value, /\*\*Kiro Usage\*\*/);
+  assert.match(item.tooltip.value, /command:toysForKiro\.openSettings/);
+
+  // Export cancel paths and write-error handling (e.g. locked file / directory target).
+  stub.answers.push(undefined);
+  assert.equal(await stub.vscode.commands.executeCommand('toysForKiro.exportData', {}), undefined);
+  stub.answers.push(undefined);
+  assert.equal(await stub.vscode.commands.executeCommand('toysForKiro.exportData', { target: 'requests-csv' }), undefined);
+  stub.allowErrors = true;
+  stub.answers.push(fx.userData); // directory path forces writeFile failure
+  assert.equal(await stub.vscode.commands.executeCommand('toysForKiro.exportData', { target: 'requests-csv' }), undefined);
+  stub.allowErrors = false;
+  assert.equal(stub.messages.at(-1).kind, 'error');
+  assert.match(stub.messages.at(-1).text, /Kiro Usage/);
+
+  // Concurrent settings change during an in-flight background tick must not drop legacy import.
+  stub.config.importLegacySessions = false;
+  await api.app.onSettingsChanged();
+  assert.equal(api.app.buildPayload({ view: 'overview', range: 'all' }).totals.legacyRequests, 0);
+  const bgTick = api.app.tick({});
+  stub.config.importLegacySessions = true;
+  await Promise.all([bgTick, api.app.onSettingsChanged()]);
+  assert.equal(api.app.buildPayload({ view: 'overview', range: 'all' }).totals.legacyRequests, 1);
+});
+
+test('bilingual CHANGELOG, default-English README + README.zh-CN.md, packaging manifest, and Kiro icon geometry', () => {
+  const root = path.join(__dirname, '..');
+  const pkg = require('../package.json');
+
+  // README.md is English by default with a Chinese overview note + link to README.zh-CN.md.
+  const readmeEn = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+  const readmeZh = fs.readFileSync(path.join(root, 'README.zh-CN.md'), 'utf8');
+  assert.equal(fs.existsSync(path.join(root, 'README.en.md')), false, 'stale README.en.md is removed');
+  assert.match(readmeEn, /\*\*English\*\*\s*\|\s*\[简体中文\]\(https:\/\/github\.com\/MOLUOGH\/toys-for-kiro\/blob\/main\/README\.zh-CN\.md\)/);
+  assert.match(readmeEn, /中文说明[\s\S]*README\.zh-CN\.md/);
+  assert.match(readmeEn, /^## Features$/m);
+  assert.match(readmeEn, /docs\/images\/en\/overview\.png/);
+  assert.match(readmeZh, /\[English\]\(https:\/\/github\.com\/MOLUOGH\/toys-for-kiro\/blob\/main\/README\.md\)\s*\|\s*\*\*简体中文\*\*/);
+  assert.match(readmeZh, /^## 功能$/m);
+  assert.match(readmeZh, /docs\/images\/overview\.png/);
+
+  for (const settingKey of Object.keys(pkg.contributes.configuration.properties)) {
+    assert.ok(readmeEn.includes(`\`${settingKey}\``), `README.md documents ${settingKey}`);
+    assert.ok(readmeZh.includes(`\`${settingKey}\``), `README.zh-CN.md documents ${settingKey}`);
+  }
+
+  // CHANGELOG.md is bilingual and matches .github/workflows/release.yml extraction rules.
+  const changelogLines = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8').split(/\r?\n/);
+  const versionHeader = `## ${pkg.version}`;
+  const start = changelogLines.indexOf(versionHeader);
+  assert.ok(start >= 0, `CHANGELOG.md has exact '${versionHeader}' heading`);
+  let end = start + 1;
+  while (end < changelogLines.length && !changelogLines[end].startsWith('## ')) end++;
+  const releaseNotes = changelogLines.slice(start + 1, end).join('\n');
+  assert.match(releaseNotes, /^### English$/m);
+  assert.match(releaseNotes, /^### 简体中文$/m);
+  assert.match(releaseNotes, /Kiro Usage/);
+  assert.match(releaseNotes, /README\.zh-CN\.md/);
+
+  const versionSections = [];
+  for (let i = 0; i < changelogLines.length; i++) {
+    if (changelogLines[i].startsWith('## ')) versionSections.push(i);
+  }
+  assert.ok(versionSections.length >= 7, 'all historical version sections are preserved');
+  for (let s = 0; s < versionSections.length; s++) {
+    const secStart = versionSections[s];
+    const secEnd = s + 1 < versionSections.length ? versionSections[s + 1] : changelogLines.length;
+    const secBody = changelogLines.slice(secStart + 1, secEnd).join('\n');
+    assert.match(secBody, /^### English$/m, `${changelogLines[secStart]} has English section`);
+    assert.match(secBody, /^### 简体中文$/m, `${changelogLines[secStart]} has Chinese section`);
+  }
+
+  // Packaging script includes README.zh-CN.md and excludes removed README.en.md.
+  const pkgScript = fs.readFileSync(path.join(root, 'scripts', 'package.ps1'), 'utf8');
+  assert.match(pkgScript, /'README\.md',\s*'README\.zh-CN\.md'/);
+  assert.doesNotMatch(pkgScript, /README\.en\.md/);
+
+  // Kiro ghost vertical pill eyes, ghost-to-arc clearance, bar separation, and 256x256 RGBA icon.png.
+  const iconPng = fs.readFileSync(path.join(root, 'media', 'icon.png'));
+  assert.deepEqual([...iconPng.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 'icon.png has PNG signature');
+  assert.equal(iconPng.readUInt32BE(16), 256, 'icon.png width is 256');
+  assert.equal(iconPng.readUInt32BE(20), 256, 'icon.png height is 256');
+  assert.equal(iconPng[24], 8, 'icon.png is 8-bit');
+  assert.equal(iconPng[25], 6, 'icon.png is RGBA (colorType 6)');
+
+  const checkKiroIconSvg = (svg, label, minGhostX, expectedBars) => {
+    const eyes = [...svg.matchAll(/<ellipse\s+cx="([\d.]+)"\s+cy="([\d.]+)"\s+rx="([\d.]+)"\s+ry="([\d.]+)"/g)].map((m) => ({
+      cx: Number(m[1]),
+      cy: Number(m[2]),
+      rx: Number(m[3]),
+      ry: Number(m[4]),
+    }));
+    assert.equal(eyes.length, 2, `${label} has exactly two Kiro ghost pill eyes`);
+    for (const eye of eyes) assert.ok(eye.ry > eye.rx * 1.8, `${label} eye is vertical pill-shaped`);
+    const [left, right] = eyes.sort((a, b) => a.cx - b.cx);
+    assert.equal(right.cx - left.cx, 2, `${label} eyes use 2px center spacing for symmetrical 1x/1.5x/2x DPI rasterization`);
+    assert.ok(right.cx - left.cx - left.rx - right.rx >= 0.8 - 1e-9, `${label} eyes have >= 0.8px horizontal separation`);
+
+    const ghostPath = svg.match(/<path\s+d="([^"]+)"\s+fill="#FFFFFF"/)?.[1] || '';
+    assert.ok(ghostPath.length > 0, `${label} contains white Kiro ghost silhouette`);
+    const nums = [...ghostPath.matchAll(/-?\d+(?:\.\d+)?/g)].map((m) => Number(m[0]));
+    const xs = nums.filter((_, i) => i % 2 === 0);
+    assert.ok(Math.min(...xs) >= minGhostX, `${label} ghost clears left gauge arc without bleeding`);
+
+    const bars = [...svg.matchAll(/<rect\s+x="([\d.]+)"\s+y="([\d.]+)"\s+width="([\d.]+)"\s+height="([\d.]+)"\s+rx="([\d.]+)"\s+fill="#/g)].map((m) => ({
+      x: Number(m[1]),
+      w: Number(m[3]),
+    }));
+    assert.equal(bars.length, expectedBars, `${label} has ${expectedBars} crisp usage bars`);
+    assert.ok(bars[0].x - Math.max(...xs) >= 1.0, `${label} first bar clears ghost silhouette`);
+    for (let i = 1; i < bars.length; i++) {
+      assert.ok(bars[i].x - (bars[i - 1].x + bars[i - 1].w) >= 0.8, `${label} bar ${i} has crisp gap from previous bar`);
+    }
+  };
+  checkKiroIconSvg(fs.readFileSync(path.join(root, 'media', 'icon.svg'), 'utf8'), 'media/icon.svg', 3.8, 2);
+  const dashJs = fs.readFileSync(path.join(root, 'media', 'dashboard.js'), 'utf8');
+  const brandSvg = dashJs.match(/const BRAND_ICON =\s*'([^']+)'/)?.[1] || '';
+  checkKiroIconSvg(brandSvg, 'BRAND_ICON', 5.5, 3);
 });

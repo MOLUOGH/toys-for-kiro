@@ -1,11 +1,15 @@
 {
   "name": "toys-for-kiro",
-  "displayName": "Toys for Kiro",
-  "description": "Unofficial usage dashboard for Kiro IDE: credits, estimated tokens, context usage, request history and quota. Reads local data only; not affiliated with AWS. 非官方的 Kiro IDE 用量面板。",
-  "version": "0.4.0",
+  "displayName": "Kiro Usage",
+  "description": "Credits, quota & context usage stats. Local token, latency & cost dashboard for Kiro IDE (unofficial, offline). Kiro 用量、额度与上下文统计面板。",
+  "version": "0.5.0",
   "publisher": "moluogh",
   "license": "MIT",
   "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#24104e",
+    "theme": "dark"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/MOLUOGH/toys-for-kiro.git"
@@ -18,13 +22,28 @@
     "vscode": "^1.90.0"
   },
   "categories": [
-    "Other"
+    "Visualization",
+    "Machine Learning"
   ],
   "keywords": [
     "kiro",
+    "kiro-ide",
     "usage",
     "credits",
-    "tokens"
+    "quota",
+    "tokens",
+    "context",
+    "dashboard",
+    "stats",
+    "monitor",
+    "analytics",
+    "billing",
+    "cost",
+    "用量",
+    "额度",
+    "统计",
+    "监控",
+    "上下文"
   ],
   "main": "./src/extension.js",
   "activationEvents": [
@@ -38,27 +57,69 @@
       {
         "command": "toysForKiro.openDashboard",
         "title": "%command.openDashboard%",
-        "category": "Toys for Kiro",
+        "category": "Kiro Usage",
         "icon": "$(pie-chart)"
+      },
+      {
+        "command": "toysForKiro.exportData",
+        "title": "%command.exportData%",
+        "category": "Kiro Usage",
+        "icon": "$(export)"
+      },
+      {
+        "command": "toysForKiro.openSettings",
+        "title": "%command.openSettings%",
+        "category": "Kiro Usage",
+        "icon": "$(gear)"
       },
       {
         "command": "toysForKiro.refresh",
         "title": "%command.refresh%",
-        "category": "Toys for Kiro"
+        "category": "Kiro Usage",
+        "icon": "$(refresh)"
       },
       {
         "command": "toysForKiro.rebuildIndex",
         "title": "%command.rebuildIndex%",
-        "category": "Toys for Kiro"
+        "category": "Kiro Usage"
       },
       {
         "command": "toysForKiro.clearData",
         "title": "%command.clearData%",
-        "category": "Toys for Kiro"
+        "category": "Kiro Usage"
       }
     ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "toysForKiro.refresh",
+          "when": "activeWebviewPanelId == 'toysForKiro.dashboard'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "toysForKiro.exportData",
+          "when": "activeWebviewPanelId == 'toysForKiro.dashboard'",
+          "group": "navigation@2"
+        },
+        {
+          "command": "toysForKiro.openSettings",
+          "when": "activeWebviewPanelId == 'toysForKiro.dashboard'",
+          "group": "navigation@3"
+        },
+        {
+          "command": "toysForKiro.rebuildIndex",
+          "when": "activeWebviewPanelId == 'toysForKiro.dashboard'",
+          "group": "1_maintenance@1"
+        },
+        {
+          "command": "toysForKiro.clearData",
+          "when": "activeWebviewPanelId == 'toysForKiro.dashboard'",
+          "group": "1_maintenance@2"
+        }
+      ]
+    },
     "configuration": {
-      "title": "Toys for Kiro",
+      "title": "Kiro Usage",
       "properties": {
         "toysForKiro.language": {
           "type": "string",
@@ -123,6 +184,21 @@
           "type": "boolean",
           "default": true,
           "description": "%config.statusBar.enabled%"
+        },
+        "toysForKiro.statusBar.mode": {
+          "type": "string",
+          "default": "session",
+          "enum": [
+            "session",
+            "today",
+            "cycle"
+          ],
+          "enumDescriptions": [
+            "%config.statusBar.mode.session%",
+            "%config.statusBar.mode.today%",
+            "%config.statusBar.mode.cycle%"
+          ],
+          "description": "%config.statusBar.mode%"
         },
         "toysForKiro.refreshIntervalSeconds": {
           "type": "number",

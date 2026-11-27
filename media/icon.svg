@@ -1,1 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="#8b8b8b" stroke-width="2"/><path d="M8 2a6 6 0 0 1 6 6H8z" fill="#3794ff"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none">
+  <defs>
+    <linearGradient id="ku-bg" x1="1" y1="0.5" x2="15" y2="15.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#9B4DFF"/>
+      <stop offset="52%" stop-color="#782CE3"/>
+      <stop offset="100%" stop-color="#451294"/>
+    </linearGradient>
+    <linearGradient id="ku-rim" x1="0.5" y1="0.5" x2="14" y2="15" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.35"/>
+      <stop offset="55%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="ku-arc" x1="2.3" y1="10.8" x2="12.9" y2="4.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34D399"/>
+      <stop offset="52%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#FCD34D"/>
+    </linearGradient>
+  </defs>
+  <rect width="16" height="16" rx="3.6" fill="url(#ku-bg)"/>
+  <rect x="0.4" y="0.4" width="15.2" height="15.2" rx="3.2" stroke="url(#ku-rim)" stroke-width="0.8"/>
+  <path d="M 2.34 10.82 A 6.2 6.2 0 1 1 14.02 6.80" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="1.35" stroke-linecap="round"/>
+  <path d="M 2.34 10.82 A 6.2 6.2 0 0 1 12.89 4.48" stroke="url(#ku-arc)" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M 7.2 4.35 C 8.95 4.35, 9.75 5.75, 9.75 7.8 C 9.75 10.35, 9.35 13.15, 8.35 13.15 C 7.75 13.15, 7.45 12.55, 7.25 11.95 C 6.9 12.7, 6.35 13.15, 5.65 13.15 C 4.75 13.15, 4.5 11.95, 4.8 10.9 C 4.25 11.05, 3.95 10.75, 4.02 10.1 C 4.1 9.45, 4.55 8.7, 4.72 7.4 C 4.92 5.5, 5.75 4.35, 7.2 4.35 Z" fill="#FFFFFF"/>
+  <ellipse cx="6.5" cy="7.4" rx="0.5" ry="1.08" fill="#1F0842"/>
+  <ellipse cx="8.5" cy="7.4" rx="0.5" ry="1.08" fill="#1F0842"/>
+  <rect x="11.0" y="10.15" width="1.15" height="3.0" rx="0.55" fill="#38BDF8"/>
+  <rect x="13.0" y="8.15" width="1.15" height="5.0" rx="0.55" fill="#FCD34D"/>
+</svg>

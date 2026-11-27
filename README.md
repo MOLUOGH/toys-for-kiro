@@ -1,127 +1,138 @@
-# Toys for Kiro
+# Kiro Usage
 
 [![Release](https://img.shields.io/github/v/release/MOLUOGH/toys-for-kiro?label=release)](https://github.com/MOLUOGH/toys-for-kiro/releases/latest)
 [![Open VSX](https://img.shields.io/open-vsx/v/moluogh/toys-for-kiro?label=Open%20VSX)](https://open-vsx.org/extension/moluogh/toys-for-kiro)
-[![License: MIT](https://img.shields.io/github/license/MOLUOGH/toys-for-kiro)](LICENSE)
-![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078d4)
+[![License: MIT](https://img.shields.io/github/license/MOLUOGH/toys-for-kiro)](https://github.com/MOLUOGH/toys-for-kiro/blob/main/LICENSE)
+![Platform: Windows | macOS | Linux](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0078d4)
 
-**简体中文** | [English](https://github.com/MOLUOGH/toys-for-kiro/blob/main/README.en.md)
+**English** | [简体中文](https://github.com/MOLUOGH/toys-for-kiro/blob/main/README.zh-CN.md)
 
-Kiro IDE 的非官方用量面板：看清每个会话花了多少 credits、上下文占了多少、每次请求有多快。只读取本机的 Kiro 会话记录和日志，不修改 Kiro，不联网，不上传任何数据。
+An unofficial local usage & quota dashboard for Kiro IDE (formerly Toys for Kiro). See how many credits each session used, how full its context is, where your monthly quota stands, and how fast each request was. It reads Kiro's local session records and logs only: it does not modify Kiro, does not go online, and uploads nothing.
 
-> 非官方项目，与 AWS 无关联，也未获得其认可。Kiro 是 Amazon.com, Inc. 或其关联公司的商标。
-> 依赖的本地文件格式没有官方文档，Kiro 更新后可能需要适配。
+> **中文说明**：Kiro IDE 的非官方本地用量、额度与上下文统计面板（原 Toys for Kiro），纯离线读取本机会话记录与日志，不联网、不上传任何数据。扩展界面默认自动跟随 Kiro 显示中文，完整文档请参阅 **[简体中文版 (README.zh-CN.md)](https://github.com/MOLUOGH/toys-for-kiro/blob/main/README.zh-CN.md)**。
+
+> Unofficial project, not affiliated with or endorsed by AWS. Kiro is a trademark of Amazon.com, Inc. or its affiliates.
+> The local file formats it reads are undocumented, so a Kiro update may require changes.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/MOLUOGH/toys-for-kiro/main/docs/images/overview.png" alt="用量概览" width="860">
+  <img src="https://raw.githubusercontent.com/MOLUOGH/toys-for-kiro/main/docs/images/en/overview.png" alt="Usage overview" width="860">
 </p>
 
-<sub>截图使用编造的演示数据。</sub>
+<sub>Screenshots use made-up demo data.</sub>
 
-## 功能
+## Features
 
-- **状态栏**：当前会话的上下文占用和已用 credits（上下文占用 ≥ 75% 黄色警告、≥ 90% 红色提醒）。悬停可以看到轮次、请求、工具调用、credits（含子智能体和辅助）、估算 token、首包延迟、模型和工具耗时、可见输出速度，以及本计费周期的额度。
-- **概览**：请求数、估算 token、credits 和折算美元；用量热力图（每格 5 分钟到 1 天，随时间范围自动调整）；模型健康时间线；按模型的用量分布。
-- **请求**：逐条请求记录，可按模型、会话、状态筛选，显示上下文占用、首包延迟、耗时、错误类型、重试和回退。
-- **会话**：会话列表和单个会话的完整统计，支持按标题/工作区/模型搜索以及仅看当前工作区。
-- **额度**：套餐、本周期已用和上限、日均消耗与周期末用量预测、奖励额度、重置时间、本机每日 credits。
-- **隐私开关**：可以只在内存里统计，不写磁盘。
-- **中英文界面**：默认跟随 Kiro 的显示语言，也可以在设置里指定。
-- 支持导入 Kiro 1.0 之前的旧格式会话。
+- **Status bar**: context usage of the current session (highlights yellow at ≥ 75% and red at ≥ 90%) paired with a configurable metric (`session` credits, `today` credits, or `cycle` quota %). Hover for turns, requests, tool calls, credits (including subagents and auxiliary calls), estimated tokens, time to first token, model and tool time, visible output speed, today and cycle totals, plus quick links to **Dashboard · Export · Settings**.
+- **Overview**: requests, estimated tokens, credits and their USD equivalent; a usage heatmap (cells from 5 minutes to 1 day, chosen to fit the time range); a model health timeline; usage by model.
+- **Requests**: every request, filterable by model, session and status, with context usage, time to first token, duration, error type, retries and fallbacks.
+- **Sessions**: a session list with search (title, workspace, model), current-workspace filter, and full statistics for any session.
+- **Quota**: plan, used and limit for this cycle, daily pace and end-of-cycle projection, bonus credits, reset time, and daily credits on this machine.
+- **Data export**: export requests, sessions, or daily credits to CSV (UTF-8 BOM for Excel), or export a full JSON usage report.
+- **Privacy switch**: keep statistics in memory only, with nothing written to disk.
+- **Chinese and English UI**: follows Kiro's display language by default; can be set explicitly.
+- Imports sessions in the pre-1.0 Kiro format.
 
 <table>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/MOLUOGH/toys-for-kiro/main/docs/images/sessions.png" alt="会话统计"></td>
-    <td><img src="https://raw.githubusercontent.com/MOLUOGH/toys-for-kiro/main/docs/images/requests.png" alt="请求记录"></td>
+    <td><img src="https://raw.githubusercontent.com/MOLUOGH/toys-for-kiro/main/docs/images/en/sessions.png" alt="Session statistics"></td>
+    <td><img src="https://raw.githubusercontent.com/MOLUOGH/toys-for-kiro/main/docs/images/en/requests.png" alt="Request history"></td>
   </tr>
   <tr>
-    <td align="center">会话统计</td>
-    <td align="center">请求记录</td>
+    <td align="center">Session statistics</td>
+    <td align="center">Request history</td>
   </tr>
 </table>
 
-## 安装
+## Install
 
-需要 Kiro IDE（Windows）。
+Requires Kiro IDE (Windows, macOS, or Linux).
 
-**从扩展面板安装（推荐）**：在 Kiro 的扩展视图里搜索 `Toys for Kiro`，点击安装。
+**From the Extensions view (recommended)**: search for `Kiro Usage` in Kiro's Extensions view and click Install.
 
-**手动安装**：
-1. 从 [Releases](https://github.com/MOLUOGH/toys-for-kiro/releases/latest) 下载 `toys-for-kiro-<版本>.vsix`。
-2. 在 Kiro 里打开命令面板（`Ctrl+Shift+P`），执行 `Extensions: Install from VSIX...`，选择下载的文件。
-   也可以在终端里执行：
+**Manually**:
+1. Download `toys-for-kiro-<version>.vsix` from [Releases](https://github.com/MOLUOGH/toys-for-kiro/releases/latest).
+2. In Kiro, open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`), run `Extensions: Install from VSIX...` and pick the file.
+   Or from a terminal:
    ```powershell
-   & "<Kiro 安装目录>\bin\kiro.cmd" --install-extension toys-for-kiro-<版本>.vsix
+   # Windows
+   & "<Kiro install dir>\bin\kiro.cmd" --install-extension toys-for-kiro-<version>.vsix
+   # macOS / Linux
+   kiro --install-extension toys-for-kiro-<version>.vsix
    ```
 
-安装后执行 `Developer: Reload Window`。状态栏右侧出现饼图图标即安装成功，点击它打开用量面板。
+Then run `Developer: Reload Window`. A pie-chart icon appears on the right of the status bar; click it to open the dashboard.
 
-卸载：在扩展视图里卸载 Toys for Kiro。本扩展的索引保存在 `%APPDATA%\Kiro\User\globalStorage\moluogh.toys-for-kiro`，卸载后可以手动删除。
+To uninstall, remove Kiro Usage in the Extensions view. Its index lives under Kiro's user-data folder in `User/globalStorage/moluogh.toys-for-kiro` (`%APPDATA%\Kiro` on Windows, `~/Library/Application Support/Kiro` on macOS, `~/.config/Kiro` on Linux); you can delete that folder afterwards.
 
-## 数字有多准
+## How accurate are the numbers
 
-| 指标 | 来源 | 准确度 |
+| Metric | Source | Accuracy |
 |---|---|---|
-| Credits | 会话记录里的 `creditSplit`（Kiro 服务端返回的计量） | 基本精确。与 Kiro 额度接口的已用量核对，相差约 1.6%。差额来自额度刷新与本地写入的时间差，以及不在本机会话记录里的用量 |
-| 上下文占用 % | 服务端返回的 `context_usage_percentage` | 精确 |
-| 输入 token | 上下文占用 % × 上下文窗口 | 窗口大小本地拿不到，默认按 1,000,000 计算（Kiro 在不知道模型窗口时也用这个值）。窗口不对时，所有输入 token 按比例偏差。可在设置里按模型修改 |
-| 输出 token | 可见文本（回复 + 工具调用参数）按字符估算 | 偏低。Kiro 只保存思考摘要，完整思考 token 看不到 |
-| 首包延迟、耗时、错误 | Kiro 日志 `q.converse.model_call_attempt` | 精确。Kiro 只保留最近约 10 次启动的日志，本扩展会把它们存进自己的索引 |
-| 美元 | credits × 单价 | 默认用额度接口返回的超额单价（$0.04），不是你套餐的实际单价 |
-| 缓存命中率 | — | Kiro 后端不返回，无法统计 |
+| Credits | `creditSplit` in the session records (metering returned by Kiro's servers) | Close to exact. Checked against the used amount from Kiro's quota API: within about 1.6%. The gap comes from the delay between quota refreshes and local writes, and from usage not recorded on this machine |
+| Context usage % | `context_usage_percentage` returned by the server | Exact |
+| Input tokens | Context usage % × context window | The window size is not available locally; 1,000,000 is assumed (Kiro uses the same value when it does not know a model's window). If the window is wrong, all input tokens are off by the same factor. Can be set per model |
+| Output tokens | Estimated from visible text (replies and tool-call arguments) | Low. Kiro only keeps thinking summaries, so full thinking tokens are not visible |
+| Time to first token, duration, errors | Kiro log lines `q.converse.model_call_attempt` | Exact. Kiro only keeps the logs of the last ~10 launches; this extension copies them into its own index |
+| USD | Credits × price | Uses the overage rate from the quota API ($0.04) by default, not your plan's actual price |
+| Cache hit rate | — | Not returned by Kiro's backend, so it cannot be measured |
 
-## 隐私和数据保存
+## Privacy and storage
 
-- 只读取本机文件，不联网，不调用任何接口，不读取登录令牌。
-- 索引里只保存数字和会话标题，不保存对话内容和账号 ID。
+- Reads local files only. No network access, no API calls, no login tokens.
+- The index stores numbers and session titles only, never conversation content or account IDs.
 
-Credits、上下文占用和 token 都从 Kiro 自己的会话文件计算，Kiro 会一直保留这些文件。只有首包延迟、耗时和错误来自 Kiro 的日志，而 Kiro 只保留最近约 10 次启动的日志。
+Credits, context usage and tokens are computed from Kiro's own session files, which Kiro keeps. Only time to first token, duration and errors come from Kiro's logs, and Kiro keeps just the last ~10 launches of those.
 
-| 模式 | 写入磁盘 | Credits / token | 延迟和错误的历史 |
+| Mode | Writes to disk | Credits / tokens | Latency and error history |
 |---|---|---|---|
-| `disk`（默认） | 本扩展的索引文件，约几百 KB | 完整 | 从安装本扩展起一直保留（可用 `retentionDays` 限制） |
-| `memory` | 不写入 | 完整 | 只有 Kiro 现存的日志 |
+| `disk` (default) | This extension's index file, a few hundred KB | Complete | Kept from the day you install it (limit with `retentionDays`) |
+| `memory` | Nothing | Complete | Only the logs Kiro still keeps |
 
-- `memory` 模式每次打开窗口都会在后台重新扫描一遍，通常几秒。从 `disk` 切到 `memory` 时，扩展会询问是否删除已保存的索引。
-- 命令 `Toys for Kiro: 清除本地数据` 删除索引文件。`disk` 模式下会立刻从 Kiro 现有文件重新生成，Kiro 已删除的日志里的记录会永久丢失。如果另一个 Kiro 窗口正在使用这个文件，Windows 不允许删除，扩展会改为清空文件内容。
+- In `memory` mode every window start rescans in the background, usually in a few seconds. When you switch from `disk` to `memory`, the extension offers to delete the saved index.
+- `Kiro Usage: Clear Local Data` deletes the index file. In `disk` mode it is rebuilt right away from Kiro's current files; records from logs Kiro has already deleted are lost for good. If another Kiro window has the file open, Windows will not allow deleting it, so the extension empties it instead.
 
 <details>
-<summary>读取的文件</summary>
+<summary>Files it reads</summary>
 
-| 位置 | 内容 |
+`<Kiro user-data>` is `%APPDATA%\Kiro` on Windows, `~/Library/Application Support/Kiro` on macOS, and `$XDG_CONFIG_HOME/Kiro` (`~/.config/Kiro` by default) on Linux.
+
+| Location | Contents |
 |---|---|
-| `~\.kiro\sessions\*\sess_*\session.json`、`messages.jsonl` | 会话元数据；每次请求的 credits 和上下文占用、每轮的请求 ID |
-| `%APPDATA%\Kiro\logs\*\window*\exthost\kiro.kiroAgent\Kiro Logs.log` | 每次模型调用的耗时和结果（只读取这一类日志行） |
-| 同目录 `q-client.log` | 额度接口的返回值（不保存账号 ID） |
-| `%APPDATA%\Kiro\User\globalStorage\state.vscdb` | Kiro 缓存的额度信息（只读打开） |
-| `%APPDATA%\Kiro\User\globalStorage\kiro.kiroagent\` | 1.0 之前的旧格式会话 |
+| `~/.kiro/sessions/*/sess_*/session.json`, `messages.jsonl` | Session metadata; credits and context usage per request; request IDs per turn |
+| `<Kiro user-data>/logs/*/window*/exthost/kiro.kiroAgent/Kiro Logs.log` | Duration and outcome of each model call (only these log lines are read) |
+| `q-client.log` in the same folder | Responses of the quota API (account IDs are not stored) |
+| `<Kiro user-data>/User/globalStorage/state.vscdb` | Quota data cached by Kiro (opened read-only) |
+| `<Kiro user-data>/User/globalStorage/kiro.kiroagent/` | Sessions in the pre-1.0 format |
 
 </details>
 
-## 设置
+## Settings
 
-| 设置 | 默认值 | 说明 |
+Click the gear icon at the top right of the dashboard (or on the editor tab title bar), **Settings** in the status bar hover card, or run `Kiro Usage: Open Settings` from the Command Palette to open all extension settings:
+
+| Setting | Default | Description |
 |---|---|---|
-| `toysForKiro.language` | auto | 界面语言：`auto` 跟随 Kiro，`zh-CN` 中文，`en` 英文 |
-| `toysForKiro.contextWindowTokens` | 1000000 | 上下文窗口大小，用于把占用百分比换算成 token |
-| `toysForKiro.modelContextWindows` | `{}` | 按模型覆盖窗口大小 |
-| `toysForKiro.creditPriceUsd` | 0 | 每 credit 的美元价格，0 表示用超额单价 |
-| `toysForKiro.importLegacySessions` | true | 导入并显示 1.0 之前的旧格式会话 |
-| `toysForKiro.storage.mode` | disk | `disk` 保存索引；`memory` 只在内存里统计，不写入磁盘 |
-| `toysForKiro.storage.retentionDays` | 0 | 延迟和错误记录保留天数，0 表示永久 |
-| `toysForKiro.statusBar.enabled` | true | 显示状态栏项 |
-| `toysForKiro.refreshIntervalSeconds` | 5 | 扫描间隔（秒） |
-| `toysForKiro.defaultRange` | cycle | 面板默认时间范围 |
+| `toysForKiro.language` | auto | UI language: `auto` follows Kiro, `zh-CN` Chinese, `en` English |
+| `toysForKiro.contextWindowTokens` | 1000000 | Context window used to turn usage percentages into tokens |
+| `toysForKiro.modelContextWindows` | `{}` | Per-model context windows |
+| `toysForKiro.creditPriceUsd` | 0 | USD per credit; 0 uses the overage rate |
+| `toysForKiro.importLegacySessions` | true | Import and show pre-1.0 sessions |
+| `toysForKiro.storage.mode` | disk | `disk` keeps the index; `memory` keeps statistics in memory only |
+| `toysForKiro.storage.retentionDays` | 0 | Days to keep latency and error records; 0 keeps them forever |
+| `toysForKiro.statusBar.enabled` | true | Show the status bar item |
+| `toysForKiro.statusBar.mode` | session | Status bar metric: `session` credits, `today` credits, or `cycle` quota % |
+| `toysForKiro.refreshIntervalSeconds` | 5 | Seconds between scans |
+| `toysForKiro.defaultRange` | cycle | Default time range of the dashboard |
 
-命令和设置项的名称跟随 Kiro 的显示语言；`toysForKiro.language` 控制面板、状态栏和弹窗。
+Command and setting names follow Kiro's display language. `toysForKiro.language` controls the dashboard, the status bar and dialogs.
 
-## 限制
+## Limitations
 
-- 只在 Windows 上测试过。
-- "当前会话"取当前工作区里最近有活动的会话。同时开着多个会话时，可能不是你正在看的那个。
-- 旧版会话没有 credits；每次执行只按最终上下文估算一次输入 token，数值偏低。
-- 正在进行的那一轮，请求 ID 要等这一轮结束才写入。在此之前，延迟数据按时间顺序和日志配对。
+- Primarily tested on Windows; macOS and Linux use Kiro's standard Electron user-data directories.
+- The "current session" is the most recently active session in the current workspace. With several sessions open, it may not be the one you are looking at.
+- Legacy sessions have no credits, and their input tokens are estimated once per run from the final context, so they read low.
+- For the turn in progress, request IDs are only written when the turn ends. Until then, latency data is matched to the log by time order.
 
-## 许可证
+## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/MOLUOGH/toys-for-kiro/blob/main/LICENSE)

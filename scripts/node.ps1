@@ -11,11 +11,17 @@ if ($node) {
 
 $kiro = $env:KIRO_EXE
 if (-not $kiro) {
+    $kiroCli = Get-Command kiro -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source
+    $fromCli = if ($kiroCli) { Join-Path (Split-Path -Parent (Split-Path -Parent $kiroCli)) 'Kiro.exe' } else { $null }
+    $driveInstalls = Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue | ForEach-Object {
+        Join-Path $_.Root 'Program Files\Kiro\Kiro.exe'
+    }
     $candidates = @(
         (Get-Process -Name Kiro -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Path),
+        $fromCli,
         "$env:LOCALAPPDATA\Programs\Kiro\Kiro.exe",
         "$env:ProgramFiles\Kiro\Kiro.exe"
-    ) | Where-Object { $_ -and (Test-Path $_) }
+    ) + @($driveInstalls) | Where-Object { $_ -and (Test-Path $_) }
     $kiro = $candidates | Select-Object -First 1
 }
 if (-not $kiro) { throw 'Node.js not found. Install Node 22.13+ or set KIRO_EXE to Kiro.exe.' }

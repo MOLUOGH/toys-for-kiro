@@ -3,10 +3,12 @@
 
 const vscode = require('vscode');
 const fs = require('fs');
+const fsp = require('fs/promises');
+const os = require('os');
 const path = require('path');
 const { resolveKiroPaths, userDataDirFromGlobalStorage } = require('./core/paths');
 const { Ingestor } = require('./core/ingest');
-const { buildPayload, findActiveSession, sessionStats } = require('./core/views');
+const { buildPayload, buildStatusData, buildExportContent } = require('./core/views');
 const { SessionStatusBar } = require('./statusBar');
 const { DashboardPanel } = require('./panel');
 const i18n = require('../media/i18n');
@@ -15,11 +17,23 @@ const QUOTA_INTERVAL_MS = 60_000;
 const PANEL_NOTIFY_MIN_MS = 5_000;
 const PRUNE_INTERVAL_MS = 3_600_000;
 const DB_FILE = 'toys-for-kiro.db';
+const EXTENSION_ID = 'moluogh.toys-for-kiro';
 
-/** @returns {import('./core/views').Settings & { storageMode: 'disk' | 'memory', retentionDays: number, statusBarEnabled: boolean, refreshIntervalSeconds: number, lang: 'zh' | 'en' }} */
+function openSettings() {
+  return vscode.commands.executeCommand('workbench.action.openSettings', `@ext:${EXTENSION_ID}`);
+}
+
+/** True for plain option bags, excluding `vscode.Uri` passed by editor/title menus. @param {unknown} v */
+function isPlainOptions(v) {
+  return Boolean(v && typeof v === 'object' && !Array.isArray(v) && !('scheme' in v) && !('fsPath' in v));
+}
+
+/** @returns {import('./core/views').Settings & { storageMode: 'disk' | 'memory', retentionDays: number, statusBarEnabled: boolean, statusBarMode: 'session' | 'today' | 'cycle', refreshIntervalSeconds: number, lang: 'zh' | 'en' }} */
 function readSettings() {
   const c = vscode.workspace.getConfiguration('toysForKiro');
   const windows = c.get('modelContextWindows', {});
+  const rawMode = String(c.get('statusBar.mode', 'session'));
+  const statusBarMode = rawMode === 'today' || rawMode === 'cycle' ? rawMode : 'session';
   return {
     contextWindowTokens: Number(c.get('contextWindowTokens', 1_000_000)) || 1_000_000,
     modelContextWindows: windows && typeof windows === 'object' ? /** @type {Record<string, number>} */ (windows) : {},
@@ -29,6 +43,7 @@ function readSettings() {
     storageMode: c.get('storage.mode', 'disk') === 'memory' ? 'memory' : 'disk',
     retentionDays: Math.max(0, Math.floor(Number(c.get('storage.retentionDays', 0)) || 0)),
     statusBarEnabled: c.get('statusBar.enabled', true) !== false,
+    statusBarMode,
     refreshIntervalSeconds: Math.min(300, Math.max(2, Number(c.get('refreshIntervalSeconds', 5)) || 5)),
     lang: i18n.resolveLang(String(c.get('language', 'auto')), vscode.env?.language),
   };
@@ -147,8 +162,8 @@ class App {
       return;
     }
     const folders = (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath);
-    const session = findActiveSession(this.store, folders);
-    this.statusBar.update(session ? { ...sessionStats(this.store, this.settings, session), storage: this.settings.storageMode } : null, this.settings.lang);
+    const data = buildStatusData(this.store, this.settings, folders);
+    this.statusBar.update(data, this.settings.lang, this.settings.statusBarMode);
   }
 
   /** @param {any} msg */
@@ -157,12 +172,71 @@ class App {
     return buildPayload(msg, { store: this.store, settings: this.settings, workspaceFolders });
   }
 
+  /**
+   * Prompt for export target and destination file, then write CSV or JSON.
+   * @param {{ target?: 'requests-csv' | 'sessions-csv' | 'daily-csv' | 'report-json', view?: string, range?: string | null, filters?: any, sessionQuery?: string, sessionWorkspaceOnly?: boolean }} [opts]
+   */
+  async exportData(opts = {}) {
+    /** @type {Array<{ id: 'requests-csv' | 'sessions-csv' | 'daily-csv' | 'report-json', label: string, description: string, slug: string }>} */
+    const allChoices = [
+      { id: 'requests-csv', label: this.t('export.requestsCsv'), description: this.t('export.requestsDesc'), slug: 'requests' },
+      { id: 'sessions-csv', label: this.t('export.sessionsCsv'), description: this.t('export.sessionsDesc'), slug: 'sessions' },
+      { id: 'daily-csv', label: this.t('export.dailyCsv'), description: this.t('export.dailyDesc'), slug: 'daily' },
+      { id: 'report-json', label: this.t('export.reportJson'), description: this.t('export.reportDesc'), slug: 'report' },
+    ];
+    let chosen = opts.target ? allChoices.find((c) => c.id === opts.target) : undefined;
+    if (!chosen) {
+      const preferred = opts.view === 'sessions' ? 'sessions-csv' : opts.view === 'quota' ? 'daily-csv' : 'requests-csv';
+      const ordered = [...allChoices.filter((c) => c.id === preferred), ...allChoices.filter((c) => c.id !== preferred)];
+      chosen = await vscode.window.showQuickPick(ordered, { placeHolder: this.t('export.placeholder') });
+    }
+    if (!chosen) return undefined;
+
+    const workspaceFolders = (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath);
+    const out = buildExportContent(
+      {
+        target: chosen.id,
+        range: opts.range ?? null,
+        filters: opts.filters,
+        sessionQuery: opts.sessionQuery,
+        sessionWorkspaceOnly: opts.sessionWorkspaceOnly,
+        unlinkedTitle: this.t('session.legacyUnlinked'),
+      },
+      { store: this.store, settings: this.settings, workspaceFolders },
+    );
+    const d = new Date();
+    const pad = (/** @type {number} */ n) => String(n).padStart(2, '0');
+    const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const filename = `kiro-usage-${chosen.slug}-${stamp}.${out.ext}`;
+    const baseDir = workspaceFolders[0] || os.homedir();
+    const uri = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(path.join(baseDir, filename)),
+      filters: out.ext === 'csv' ? { CSV: ['csv'] } : { JSON: ['json'] },
+    });
+    if (!uri) return undefined;
+    try {
+      await fsp.writeFile(uri.fsPath, out.content, 'utf8');
+    } catch (e) {
+      this.log.error(e instanceof Error ? e : String(e));
+      void vscode.window.showErrorMessage(this.t('msg.exportFailed', { e: e instanceof Error ? e.message : String(e) }));
+      return undefined;
+    }
+    void vscode.window.showInformationMessage(this.t('msg.exported', { f: path.basename(uri.fsPath) }));
+    return uri.fsPath;
+  }
+
+  /** Wait for any in-flight work, then start a scan without dropping `opts`. @param {{ legacy?: boolean, force?: boolean }} opts */
+  async runScan(opts) {
+    while (this.running) await this.running.catch(() => {});
+    if (this.disposed) return;
+    await this.tick(opts);
+  }
+
   fullScan() {
-    return this.tick({ legacy: this.settings.importLegacySessions, force: true });
+    return this.runScan({ legacy: this.settings.importLegacySessions, force: true });
   }
 
   async refresh() {
-    await this.exclusive(() => {});
     await this.fullScan();
   }
 
@@ -245,15 +319,17 @@ class App {
     if (prev.refreshIntervalSeconds !== this.settings.refreshIntervalSeconds) this.schedule();
     if (prev.lang !== this.settings.lang) {
       DashboardPanel.current?.setLang(this.settings.lang);
-      this.updateStatusBar();
+    }
+    if (prev.defaultRange !== this.settings.defaultRange) {
+      DashboardPanel.current?.post({ type: 'navigate', range: this.settings.defaultRange });
     }
     if (prev.storageMode !== this.settings.storageMode) {
       await this.switchStorage(this.settings.storageMode);
       return;
     }
+    this.updateStatusBar();
     const legacy = !prev.importLegacySessions && this.settings.importLegacySessions;
-    await this.exclusive(() => {});
-    await this.tick({ legacy, force: true });
+    await this.runScan({ legacy, force: true });
   }
 
   /** @param {string} key @param {Record<string, unknown>} [params] */
@@ -278,7 +354,7 @@ function clearMessage(app, result, mode) {
 
 /** @param {vscode.ExtensionContext} context */
 function activate(context) {
-  const log = vscode.window.createOutputChannel('Toys for Kiro', { log: true });
+  const log = vscode.window.createOutputChannel('Kiro Usage', { log: true });
   context.subscriptions.push(log);
 
   const settings = readSettings();
@@ -296,14 +372,22 @@ function activate(context) {
   const host = {
     buildPayload: (/** @type {any} */ m) => app.buildPayload(m),
     refresh: () => app.refresh(),
+    exportData: (/** @type {any} */ m) => app.exportData(m),
+    openSettings: () => openSettings(),
     defaultRange: () => app.settings.defaultRange,
     lang: () => app.settings.lang,
   };
 
   context.subscriptions.push(
     vscode.commands.registerCommand('toysForKiro.openDashboard', (/** @type {any} */ opts) => {
-      DashboardPanel.show(context, host, opts && typeof opts === 'object' ? opts : {});
+      DashboardPanel.show(context, host, isPlainOptions(opts) ? opts : {});
     }),
+    vscode.commands.registerCommand('toysForKiro.exportData', (/** @type {any} */ opts) => {
+      if (isPlainOptions(opts)) return app.exportData(opts);
+      const panel = DashboardPanel.current;
+      return app.exportData(panel ? { view: panel.activeView, range: panel.activeRange } : {});
+    }),
+    vscode.commands.registerCommand('toysForKiro.openSettings', () => openSettings()),
     vscode.commands.registerCommand('toysForKiro.refresh', () =>
       vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: app.t('msg.scanning') }, () => app.refresh()),
     ),

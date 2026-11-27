@@ -7,9 +7,35 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $root = Split-Path -Parent $PSScriptRoot
 $pkg = Get-Content -Raw -Encoding UTF8 (Join-Path $root 'package.json') | ConvertFrom-Json
-$include = @('package.json', 'package.nls.json', 'package.nls.zh-cn.json', 'README.md', 'README.en.md', 'LICENSE', 'CHANGELOG.md', 'src', 'media')
+$include = @('package.json', 'package.nls.json', 'package.nls.zh-cn.json', 'README.md', 'README.zh-CN.md', 'LICENSE', 'CHANGELOG.md', 'src', 'media')
 
 function Escape-Xml([string]$s) { [System.Security.SecurityElement]::Escape($s) }
+
+$locales = @(Get-ChildItem -Path $root -Filter 'package.nls.*.json' -File | ForEach-Object {
+    if ($_.Name -match '^package\.nls\.(.+)\.json$') { $Matches[1] }
+}) -join ','
+
+$extraProps = ''
+if ($pkg.repository -and $pkg.repository.url) {
+    $repoUrl = [string]$pkg.repository.url
+    $extraProps += "`r`n      <Property Id=`"Microsoft.VisualStudio.Services.Links.Source`" Value=`"$(Escape-Xml $repoUrl)`" />"
+    $extraProps += "`r`n      <Property Id=`"Microsoft.VisualStudio.Services.Links.Getstarted`" Value=`"$(Escape-Xml $repoUrl)`" />"
+    $extraProps += "`r`n      <Property Id=`"Microsoft.VisualStudio.Services.Links.GitHub`" Value=`"$(Escape-Xml $repoUrl)`" />"
+}
+if ($pkg.bugs -and $pkg.bugs.url) {
+    $extraProps += "`r`n      <Property Id=`"Microsoft.VisualStudio.Services.Links.Support`" Value=`"$(Escape-Xml $pkg.bugs.url)`" />"
+}
+if ($pkg.homepage) {
+    $extraProps += "`r`n      <Property Id=`"Microsoft.VisualStudio.Services.Links.Learn`" Value=`"$(Escape-Xml $pkg.homepage)`" />"
+}
+if ($pkg.galleryBanner) {
+    if ($pkg.galleryBanner.color) {
+        $extraProps += "`r`n      <Property Id=`"Microsoft.VisualStudio.Services.Branding.Color`" Value=`"$(Escape-Xml $pkg.galleryBanner.color)`" />"
+    }
+    if ($pkg.galleryBanner.theme) {
+        $extraProps += "`r`n      <Property Id=`"Microsoft.VisualStudio.Services.Branding.Theme`" Value=`"$(Escape-Xml $pkg.galleryBanner.theme)`" />"
+    }
+}
 
 $manifest = @"
 <?xml version="1.0" encoding="utf-8"?>
@@ -28,8 +54,8 @@ $manifest = @"
       <Property Id="Microsoft.VisualStudio.Code.ExtensionDependencies" Value="" />
       <Property Id="Microsoft.VisualStudio.Code.ExtensionPack" Value="" />
       <Property Id="Microsoft.VisualStudio.Code.ExtensionKind" Value="$(Escape-Xml ($pkg.extensionKind -join ','))" />
-      <Property Id="Microsoft.VisualStudio.Code.LocalizedLanguages" Value="" />
-      <Property Id="Microsoft.VisualStudio.Services.GitHubFlavoredMarkdown" Value="true" />
+      <Property Id="Microsoft.VisualStudio.Code.LocalizedLanguages" Value="$(Escape-Xml $locales)" />
+      <Property Id="Microsoft.VisualStudio.Services.GitHubFlavoredMarkdown" Value="true" />$extraProps
     </Properties>
   </Metadata>
   <Installation>
@@ -39,6 +65,7 @@ $manifest = @"
   <Assets>
     <Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="extension/package.json" Addressable="true" />
     <Asset Type="Microsoft.VisualStudio.Services.Content.Details" Path="extension/README.md" Addressable="true" />
+    <Asset Type="Microsoft.VisualStudio.Services.Content.Changelog" Path="extension/CHANGELOG.md" Addressable="true" />
     <Asset Type="Microsoft.VisualStudio.Services.Content.License" Path="extension/LICENSE" Addressable="true" />
     <Asset Type="Microsoft.VisualStudio.Services.Icons.Default" Path="extension/$(Escape-Xml $pkg.icon)" Addressable="true" />
   </Assets>

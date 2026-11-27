@@ -7,6 +7,7 @@ const Module = require('module');
 
 function createStub() {
   const commands = new Map();
+  const executed = [];
   const statusItems = [];
   const panels = [];
   const config = {};
@@ -102,7 +103,9 @@ function createStub() {
       createWebviewPanel,
       state: { focused: true },
       showErrorMessage: async (m) => {
-        throw new Error(`showErrorMessage: ${m}`);
+        messages.push({ kind: 'error', text: m });
+        if (!stub.allowErrors) throw new Error(`showErrorMessage: ${m}`);
+        return undefined;
       },
       // Dialogs return the next scripted answer (undefined = dismissed).
       showWarningMessage: async (m) => {
@@ -112,6 +115,16 @@ function createStub() {
       showInformationMessage: async (m, ...items) => {
         messages.push({ kind: 'info', text: m });
         return items.length ? answers.shift() : undefined;
+      },
+      showQuickPick: async (items) => {
+        const next = answers.shift();
+        if (typeof next === 'string') return items.find((i) => i.id === next || i.label === next);
+        return next;
+      },
+      showSaveDialog: async (opts) => {
+        const next = answers.shift();
+        if (typeof next === 'string') return Uri.file(next);
+        return next === true ? opts.defaultUri : next;
       },
       withProgress: async (_o, fn) => fn({ report() {} }),
     },
@@ -130,10 +143,15 @@ function createStub() {
         commands.set(id, fn);
         return disposable();
       },
-      executeCommand: async (id, ...args) => commands.get(id)(...args),
+      executeCommand: async (id, ...args) => {
+        executed.push({ id, args });
+        const fn = commands.get(id);
+        return fn ? fn(...args) : undefined;
+      },
     },
   };
-  return { vscode, commands, statusItems, panels, config, answers, messages };
+  const stub = { vscode, commands, executed, statusItems, panels, config, answers, messages, allowErrors: false };
+  return stub;
 }
 
 /** Load src/extension.js fresh so it binds to the currently installed stub. */

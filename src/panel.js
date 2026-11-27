@@ -5,8 +5,8 @@ const vscode = require('vscode');
 const crypto = require('crypto');
 
 /**
- * @typedef {{ view?: string, sessionId?: string | null }} OpenOptions
- * @typedef {{ buildPayload: (msg: any) => any, refresh: () => Promise<void>, defaultRange: () => string, lang: () => 'zh' | 'en' }} PanelHost
+ * @typedef {{ view?: string, range?: string | null, sessionId?: string | null }} OpenOptions
+ * @typedef {{ buildPayload: (msg: any) => any, refresh: () => Promise<void>, exportData: (opts?: any) => Promise<any>, openSettings: () => Promise<any>, defaultRange: () => string, lang: () => 'zh' | 'en' }} PanelHost
  */
 
 class DashboardPanel {
@@ -21,10 +21,17 @@ class DashboardPanel {
   static show(context, host, opts = {}) {
     if (DashboardPanel.current) {
       DashboardPanel.current.panel.reveal();
-      if (opts.view) DashboardPanel.current.post({ type: 'navigate', view: opts.view, sessionId: opts.sessionId ?? null });
+      if (opts.view || opts.range || opts.sessionId) {
+        DashboardPanel.current.post({
+          type: 'navigate',
+          view: opts.view ?? null,
+          range: opts.range ?? null,
+          sessionId: opts.sessionId ?? null,
+        });
+      }
       return DashboardPanel.current;
     }
-    const panel = vscode.window.createWebviewPanel('toysForKiro.dashboard', 'Toys for Kiro', vscode.ViewColumn.Active, {
+    const panel = vscode.window.createWebviewPanel('toysForKiro.dashboard', 'Kiro Usage', vscode.ViewColumn.Active, {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')],
     });
@@ -42,12 +49,14 @@ class DashboardPanel {
     this.panel = panel;
     this.host = host;
     this.initial = opts;
+    this.activeView = opts.view || 'overview';
+    this.activeRange = opts.range ?? null;
     this.dirty = false;
     /** @type {vscode.Disposable[]} */
     this.disposables = [];
     panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'icon.svg');
     panel.webview.html = this.html(context);
-    panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
+    panel.webview.onDidReceiveMessage((m) => this.onMessage(m).catch(() => {}), null, this.disposables);
     panel.onDidChangeViewState(() => {
       if (panel.visible && this.dirty) this.notifyChanged();
     }, null, this.disposables);
@@ -79,13 +88,24 @@ class DashboardPanel {
     if (!m || typeof m.type !== 'string') return;
     switch (m.type) {
       case 'ready':
-        this.post({ type: 'init', lang: this.host.lang(), defaultRange: this.host.defaultRange(), view: this.initial.view ?? null, sessionId: this.initial.sessionId ?? null });
+        this.post({
+          type: 'init',
+          lang: this.host.lang(),
+          defaultRange: this.host.defaultRange(),
+          view: this.initial.view ?? null,
+          range: this.initial.range ?? null,
+          sessionId: this.initial.sessionId ?? null,
+        });
         break;
       case 'load':
         try {
+          const view = String(m.view || 'overview');
+          const range = typeof m.range === 'string' ? m.range : null;
+          this.activeView = view;
+          this.activeRange = view === 'quota' ? 'cycle' : range;
           const payload = this.host.buildPayload({
-            view: String(m.view || 'overview'),
-            range: typeof m.range === 'string' ? m.range : null,
+            view,
+            range,
             filters: m.filters && typeof m.filters === 'object' ? m.filters : {},
             sessionId: typeof m.sessionId === 'string' ? m.sessionId : null,
           });
@@ -97,6 +117,12 @@ class DashboardPanel {
       case 'refresh':
         await this.host.refresh();
         this.post({ type: 'changed' });
+        break;
+      case 'export':
+        await this.host.exportData(m);
+        break;
+      case 'settings':
+        await this.host.openSettings();
         break;
       default:
         break;
@@ -122,7 +148,7 @@ class DashboardPanel {
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="${media('dashboard.css')}">
-<title>Toys for Kiro</title>
+<title>Kiro Usage</title>
 </head>
 <body>
 <div id="root"></div>

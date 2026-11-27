@@ -147,7 +147,8 @@
     switch (m.type) {
       case 'init':
         setLang(m.lang);
-        if (!state.range) state.range = m.defaultRange || 'cycle';
+        if (m.range) state.range = m.range;
+        else if (!state.range) state.range = m.defaultRange || 'cycle';
         if (m.view) state.view = m.view;
         if (m.sessionId) state.sessionId = m.sessionId;
         load();
@@ -159,6 +160,7 @@
         break;
       case 'navigate':
         state.view = m.view || state.view;
+        if (m.range) state.range = m.range;
         if (m.sessionId) state.sessionId = m.sessionId;
         load();
         break;
@@ -197,6 +199,19 @@
         break;
       case 'refresh':
         vscode.postMessage({ type: 'refresh' });
+        break;
+      case 'export':
+        vscode.postMessage({
+          type: 'export',
+          view: state.view,
+          range: state.view === 'quota' ? 'cycle' : state.range,
+          filters: state.view === 'requests' ? state.filters : undefined,
+          sessionQuery: state.view === 'sessions' ? state.sessionQuery : undefined,
+          sessionWorkspaceOnly: state.view === 'sessions' ? state.sessionWorkspaceOnly : undefined,
+        });
+        break;
+      case 'settings':
+        vscode.postMessage({ type: 'settings' });
         break;
       case 'metric':
         state.metric = el.dataset.value || 'tokens';
@@ -264,13 +279,22 @@
     }
   }
 
+  const BRAND_ICON =
+    '<svg class="brand-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><defs><linearGradient id="ku-b-bg" x1="2" y1="1" x2="22" y2="23" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#9B4DFF"/><stop offset="52%" stop-color="#782CE3"/><stop offset="100%" stop-color="#451294"/></linearGradient><linearGradient id="ku-b-rim" x1="1" y1="1" x2="21" y2="22" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.35"/><stop offset="55%" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient><linearGradient id="ku-b-arc" x1="3.5" y1="16.2" x2="19.3" y2="6.7" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#34D399"/><stop offset="52%" stop-color="#38BDF8"/><stop offset="100%" stop-color="#FCD34D"/></linearGradient></defs><rect width="24" height="24" rx="5.5" fill="url(#ku-b-bg)"/><rect x="0.5" y="0.5" width="23" height="23" rx="5" stroke="url(#ku-b-rim)"/><path d="M 3.51 16.18 A 9.3 9.3 0 1 1 20.98 9.99" stroke="#FFFFFF" stroke-opacity="0.2" stroke-width="1.8" stroke-linecap="round"/><path d="M 3.51 16.18 A 9.3 9.3 0 0 1 19.33 6.67" stroke="url(#ku-b-arc)" stroke-width="1.9" stroke-linecap="round"/><circle cx="19.33" cy="6.67" r="0.62" fill="#FFFFFF"/><path d="M 10.45 6.45 C 12.85 6.45, 14.0 8.5, 14.0 11.45 C 14.0 15.2, 13.5 19.5, 11.95 19.5 C 11.1 19.5, 10.7 18.6, 10.45 17.75 C 10.0 18.8, 9.2 19.5, 8.15 19.5 C 6.85 19.5, 6.45 17.7, 6.85 16.15 C 6.05 16.35, 5.65 15.85, 5.75 14.9 C 5.85 13.95, 6.55 12.9, 6.8 11.05 C 7.1 8.25, 8.3 6.45, 10.45 6.45 Z" fill="#FFFFFF"/><ellipse cx="10.5" cy="11.0" rx="0.6" ry="1.32" fill="#1F0842"/><ellipse cx="12.5" cy="11.0" rx="0.6" ry="1.32" fill="#1F0842"/><rect x="16.0" y="16.0" width="1.15" height="3.5" rx="0.55" fill="#34D399"/><rect x="18.0" y="14.0" width="1.15" height="5.5" rx="0.55" fill="#38BDF8"/><rect x="20.0" y="11.8" width="1.15" height="7.7" rx="0.55" fill="#FCD34D"/></svg>';
+  const ICON_EXPORT =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+  const ICON_REFRESH =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><polyline points="21 3 21 8 16 8"/></svg>';
+  const ICON_SETTINGS =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+
   function header() {
     const tabs = VIEWS.map((k) => `<button class="tab${state.view === k ? ' active' : ''}" data-action="view" data-view="${k}">${esc(t('view.' + k))}</button>`).join('');
     const range =
       state.view === 'quota'
         ? ''
         : `<select class="range" data-change="range" title="${esc(t('range.title'))}">${RANGES.map((k) => `<option value="${k}"${state.range === k ? ' selected' : ''}>${esc(t('range.' + k))}</option>`).join('')}</select>`;
-    return `<header class="top"><div class="brand">Toys for Kiro</div><nav class="tabs">${tabs}</nav><div class="grow"></div>${range}<button class="icon-btn" data-action="refresh" title="${esc(t('common.refresh'))}">⟳</button></header>`;
+    return `<header class="top"><div class="brand">${BRAND_ICON}<span>Kiro Usage</span></div><nav class="tabs">${tabs}</nav><div class="grow"></div>${range}<button class="icon-btn" data-action="export" title="${esc(t('common.export'))}" aria-label="${esc(t('common.export'))}">${ICON_EXPORT}</button><button class="icon-btn" data-action="refresh" title="${esc(t('common.refresh'))}" aria-label="${esc(t('common.refresh'))}">${ICON_REFRESH}</button><button class="icon-btn" data-action="settings" title="${esc(t('common.settings'))}" aria-label="${esc(t('common.settings'))}">${ICON_SETTINGS}</button></header>`;
   }
 
   /** @param {any} r */
@@ -520,7 +544,7 @@ ${card(t('overview.credits'), cr(tt.credits), creditSub, t('overview.priceNote',
     ].join('');
     return `<section class="panel session-card"><div class="panel-head"><h2 class="ellipsis" title="${esc(title)}">${esc(title)}</h2>${
       legacy ? legacyTag() : ''
-    }<div class="grow"></div><span class="muted">${esc(s.modelId || '')} · ${esc(mdhm(s.updatedAt))}</span><button class="icon-btn" data-action="close-session" title="${esc(t('common.close'))}">✕</button></div>${
+    }<div class="grow"></div><span class="muted">${esc(s.modelId || '')} · ${esc(mdhm(s.updatedAt))}</span><button class="icon-btn" data-action="close-session" title="${esc(t('common.close'))}" aria-label="${esc(t('common.close'))}">✕</button></div>${
       s.workspace ? `<div class="muted small ellipsis" title="${esc(s.workspace)}">${esc(s.workspace)}</div>` : ''
     }<div class="stats">${stats}</div>${legacy ? `<div class="card-note">${esc(t('session.legacyNote'))}</div>` : ''}</section>`;
   }
