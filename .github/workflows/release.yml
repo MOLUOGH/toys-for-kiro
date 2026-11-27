@@ -56,15 +56,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release create $env:GITHUB_REF_NAME "dist/toys-for-kiro-$env:VERSION.vsix" --title $env:GITHUB_REF_NAME --notes-file notes.md --verify-tag
 
-      - name: Create Open VSX namespace
-        if: env.OVSX_PAT != ''
-        shell: pwsh
-        run: |
-          $out = npx --yes ovsx create-namespace moluogh -p $env:OVSX_PAT 2>&1 | Out-String
-          $out
-          if ($LASTEXITCODE -ne 0 -and $out -notmatch 'already exists') { throw 'create-namespace failed' }
-          $global:LASTEXITCODE = 0
-
       - name: Publish to Open VSX
         if: env.OVSX_PAT != ''
         shell: pwsh

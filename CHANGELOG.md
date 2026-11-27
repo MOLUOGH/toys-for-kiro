@@ -1,5 +1,15 @@
 # Changelog / 更新日志
 
+## 0.5.1
+
+### English
+
+- **Fixed Marketplace card description**: cleared `Microsoft.VisualStudio.Code.LocalizedLanguages` in `extension.vsixmanifest` (reserved for IDE Language Packs) so Kiro's Extensions Marketplace search list displays the extension summary instead of `Zh-cn`.
+
+### 简体中文
+
+- **修复扩展市场搜索列表简介显示**：清空 `extension.vsixmanifest` 中仅供 IDE 语言包使用的 `Microsoft.VisualStudio.Code.LocalizedLanguages` 属性，修复未安装时扩展搜索卡片简介被覆盖显示为 `Zh-cn` 的问题。
+
 ## 0.5.0
 
 ### English

@@ -575,14 +575,13 @@ test('bilingual CHANGELOG, default-English README + README.zh-CN.md, packaging m
   const releaseNotes = changelogLines.slice(start + 1, end).join('\n');
   assert.match(releaseNotes, /^### English$/m);
   assert.match(releaseNotes, /^### 简体中文$/m);
-  assert.match(releaseNotes, /Kiro Usage/);
-  assert.match(releaseNotes, /README\.zh-CN\.md/);
+  assert.ok(releaseNotes.trim().length > 20, 'current version release notes are non-empty');
 
   const versionSections = [];
   for (let i = 0; i < changelogLines.length; i++) {
     if (changelogLines[i].startsWith('## ')) versionSections.push(i);
   }
-  assert.ok(versionSections.length >= 7, 'all historical version sections are preserved');
+  assert.ok(versionSections.length >= 8, 'all historical version sections are preserved');
   for (let s = 0; s < versionSections.length; s++) {
     const secStart = versionSections[s];
     const secEnd = s + 1 < versionSections.length ? versionSections[s + 1] : changelogLines.length;
@@ -591,10 +590,12 @@ test('bilingual CHANGELOG, default-English README + README.zh-CN.md, packaging m
     assert.match(secBody, /^### 简体中文$/m, `${changelogLines[secStart]} has Chinese section`);
   }
 
-  // Packaging script includes README.zh-CN.md and excludes removed README.en.md.
+  // Packaging script includes README.zh-CN.md, excludes removed README.en.md, and keeps
+  // LocalizedLanguages="" (setting it on non-language-pack extensions overwrites the Marketplace card description).
   const pkgScript = fs.readFileSync(path.join(root, 'scripts', 'package.ps1'), 'utf8');
   assert.match(pkgScript, /'README\.md',\s*'README\.zh-CN\.md'/);
   assert.doesNotMatch(pkgScript, /README\.en\.md/);
+  assert.match(pkgScript, /<Property Id="Microsoft\.VisualStudio\.Code\.LocalizedLanguages" Value="" \/>/);
 
   // Kiro ghost vertical pill eyes, ghost-to-arc clearance, bar separation, and 256x256 RGBA icon.png.
   const iconPng = fs.readFileSync(path.join(root, 'media', 'icon.png'));

@@ -11,10 +11,6 @@ $include = @('package.json', 'package.nls.json', 'package.nls.zh-cn.json', 'READ
 
 function Escape-Xml([string]$s) { [System.Security.SecurityElement]::Escape($s) }
 
-$locales = @(Get-ChildItem -Path $root -Filter 'package.nls.*.json' -File | ForEach-Object {
-    if ($_.Name -match '^package\.nls\.(.+)\.json$') { $Matches[1] }
-}) -join ','
-
 $extraProps = ''
 if ($pkg.repository -and $pkg.repository.url) {
     $repoUrl = [string]$pkg.repository.url
@@ -54,7 +50,7 @@ $manifest = @"
       <Property Id="Microsoft.VisualStudio.Code.ExtensionDependencies" Value="" />
       <Property Id="Microsoft.VisualStudio.Code.ExtensionPack" Value="" />
       <Property Id="Microsoft.VisualStudio.Code.ExtensionKind" Value="$(Escape-Xml ($pkg.extensionKind -join ','))" />
-      <Property Id="Microsoft.VisualStudio.Code.LocalizedLanguages" Value="$(Escape-Xml $locales)" />
+      <Property Id="Microsoft.VisualStudio.Code.LocalizedLanguages" Value="" />
       <Property Id="Microsoft.VisualStudio.Services.GitHubFlavoredMarkdown" Value="true" />$extraProps
     </Properties>
   </Metadata>

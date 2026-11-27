@@ -2,7 +2,7 @@
   "name": "toys-for-kiro",
   "displayName": "Kiro Usage",
   "description": "Credits, quota & context usage stats. Local token, latency & cost dashboard for Kiro IDE (unofficial, offline). Kiro 用量、额度与上下文统计面板。",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "moluogh",
   "license": "MIT",
   "icon": "media/icon.png",
